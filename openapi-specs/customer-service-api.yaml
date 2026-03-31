@@ -1,0 +1,233 @@
+openapi: 3.0.3
+info:
+  title: Customer Service API
+  description: Ügyfélkezelés — CRUD műveletek az ügyféladatokon
+  version: 1.0.0
+
+tags:
+  - name: Customer
+    description: Ügyfél műveletek
+
+paths:
+  /api/customers:
+    get:
+      tags: [Customer]
+      operationId: listCustomers
+      summary: Ügyfelek listázása
+      responses:
+        "200":
+          description: Ügyfelek listája
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CustomerDto"
+
+    post:
+      tags: [Customer]
+      operationId: createCustomer
+      summary: Új ügyfél regisztrálása
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCustomerRequest"
+      responses:
+        "201":
+          description: Ügyfél sikeresen létrehozva
+          headers:
+            Location:
+              description: Az új ügyfél URL-je
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerDto"
+        "409":
+          description: Már létezik ügyfél ezzel az adóazonosítóval
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/customers/{id}:
+    get:
+      tags: [Customer]
+      operationId: getCustomer
+      summary: Ügyfél lekérése azonosító alapján
+      parameters:
+        - $ref: "#/components/parameters/CustomerId"
+      responses:
+        "200":
+          description: Ügyfél adatai
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerDto"
+        "404":
+          description: Ügyfél nem található
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    put:
+      tags: [Customer]
+      operationId: updateCustomer
+      summary: Ügyfél adatok módosítása
+      parameters:
+        - $ref: "#/components/parameters/CustomerId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCustomerRequest"
+      responses:
+        "200":
+          description: Ügyfél adatai frissítve
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerDto"
+        "404":
+          description: Ügyfél nem található
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/customers/{id}/status:
+    put:
+      tags: [Customer]
+      operationId: updateCustomerStatus
+      summary: Ügyfél státusz módosítása (ACTIVE/SUSPENDED/CLOSED)
+      parameters:
+        - $ref: "#/components/parameters/CustomerId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateStatusRequest"
+      responses:
+        "200":
+          description: Státusz frissítve
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerDto"
+        "404":
+          description: Ügyfél nem található
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  parameters:
+    CustomerId:
+      name: id
+      in: path
+      required: true
+      description: Ügyfél azonosító
+      schema:
+        type: integer
+        format: int64
+
+  schemas:
+    CustomerDto:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        taxId:
+          type: string
+          description: Adóazonosító (unique)
+          example: "8461234567"
+        firstName:
+          type: string
+          example: "János"
+        lastName:
+          type: string
+          example: "Kovács"
+        email:
+          type: string
+          format: email
+          example: "janos.kovacs@example.com"
+        phone:
+          type: string
+          example: "+36301234567"
+        status:
+          $ref: "#/components/schemas/CustomerStatus"
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateCustomerRequest:
+      type: object
+      required:
+        - taxId
+        - firstName
+        - lastName
+        - email
+      properties:
+        taxId:
+          type: string
+          description: Adóazonosító (unique)
+          example: "8461234567"
+        firstName:
+          type: string
+          example: "János"
+        lastName:
+          type: string
+          example: "Kovács"
+        email:
+          type: string
+          format: email
+          example: "janos.kovacs@example.com"
+        phone:
+          type: string
+          example: "+36301234567"
+
+    UpdateCustomerRequest:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+
+    UpdateStatusRequest:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          $ref: "#/components/schemas/CustomerStatus"
+
+    CustomerStatus:
+      type: string
+      enum:
+        - ACTIVE
+        - SUSPENDED
+        - CLOSED
+
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Hibaüzenet
+        timestamp:
+          type: string
+          format: date-time

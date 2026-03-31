@@ -1,0 +1,18 @@
+.transfer-card {
+  max-width: 600px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.result-card {
+  margin-top: 16px;
+  max-width: 600px;
+}
+
+.result-completed { border-left: 4px solid #4caf50; }
+.result-failed { border-left: 4px solid #f44336; }
+.result-pending { border-left: 4px solid #ff9800; }

@@ -1,0 +1,11 @@
+<mat-toolbar color="primary" class="app-toolbar">
+  <span>Bank Demo</span>
+  <span class="spacer"></span>
+  <a mat-button routerLink="/dashboard" routerLinkActive="active-link">Dashboard</a>
+  <a mat-button routerLink="/clients" routerLinkActive="active-link">Clients</a>
+  <a mat-button routerLink="/transfer" routerLinkActive="active-link">Transfer</a>
+</mat-toolbar>
+
+<div class="app-content">
+  <router-outlet />
+</div>

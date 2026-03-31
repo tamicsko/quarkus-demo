@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="001" author="benno">
+        <createTable tableName="transaction" schemaName="tx_svc">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="transaction_ref" type="VARCHAR(36)">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uq_transaction_ref"/>
+            </column>
+            <column name="from_account_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="to_account_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="amount" type="DECIMAL(19,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="currency" type="VARCHAR(3)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="failure_reason" type="VARCHAR(500)"/>
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="completed_at" type="TIMESTAMP"/>
+        </createTable>
+
+        <createIndex tableName="transaction" schemaName="tx_svc" indexName="idx_tx_from_account">
+            <column name="from_account_id"/>
+        </createIndex>
+        <createIndex tableName="transaction" schemaName="tx_svc" indexName="idx_tx_to_account">
+            <column name="to_account_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

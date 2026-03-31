@@ -1,0 +1,27 @@
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.account-table {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.amount {
+  font-family: monospace;
+  text-align: right;
+}
+
+.status-chip {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status-active { background: #e8f5e9; color: #2e7d32; }
+.status-suspended, .status-frozen { background: #fff3e0; color: #e65100; }
+.status-closed { background: #fbe9e7; color: #c62828; }

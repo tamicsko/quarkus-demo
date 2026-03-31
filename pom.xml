@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>dev.benno</groupId>
+    <artifactId>quarkus-demo-parent</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>Bank Demo — Parent</name>
+    <description>Multi-module banking demo: service layer + BFF backend + Angular frontend</description>
+
+    <!-- ============================================================= -->
+    <!-- MODULES                                                       -->
+    <!-- ============================================================= -->
+    <modules>
+        <module>customer-service</module>
+        <module>account-service</module>
+        <module>transaction-service</module>
+        <module>backend</module>
+    </modules>
+
+    <!-- ============================================================= -->
+    <!-- PROPERTIES — egyetlen hely az összes verziónak                 -->
+    <!-- ============================================================= -->
+    <properties>
+        <!-- Java -->
+        <maven.compiler.release>21</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+
+        <!-- Quarkus -->
+        <quarkus.platform.group-id>io.quarkus.platform</quarkus.platform.group-id>
+        <quarkus.platform.artifact-id>quarkus-bom</quarkus.platform.artifact-id>
+        <quarkus.platform.version>3.34.1</quarkus.platform.version>
+
+        <!-- OpenAPI Generator -->
+        <openapi-generator.version>7.12.0</openapi-generator.version>
+
+        <!-- Plugin verziók -->
+        <compiler-plugin.version>3.15.0</compiler-plugin.version>
+        <surefire-plugin.version>3.5.4</surefire-plugin.version>
+        <build-helper-plugin.version>3.6.0</build-helper-plugin.version>
+
+        <!-- Egyéb dependency verziók -->
+        <jackson-databind-nullable.version>0.2.6</jackson-databind-nullable.version>
+        <skipITs>true</skipITs>
+    </properties>
+
+    <!-- ============================================================= -->
+    <!-- DEPENDENCY MANAGEMENT — közös verziók, child-ok öröklik       -->
+    <!-- ============================================================= -->
+    <dependencyManagement>
+        <dependencies>
+            <!-- Quarkus BOM — az összes Quarkus dependency verziót kezeli -->
+            <dependency>
+                <groupId>${quarkus.platform.group-id}</groupId>
+                <artifactId>${quarkus.platform.artifact-id}</artifactId>
+                <version>${quarkus.platform.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- OpenAPI generált kódhoz szükséges -->
+            <dependency>
+                <groupId>org.openapitools</groupId>
+                <artifactId>jackson-databind-nullable</artifactId>
+                <version>${jackson-databind-nullable.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <!-- ============================================================= -->
+    <!-- BUILD — pluginManagement: közös plugin konfiguráció            -->
+    <!-- A child modulok <plugins>-ben csak aktiválják, nem konfigurálják újra -->
+    <!-- ============================================================= -->
+    <build>
+        <pluginManagement>
+            <plugins>
+                <!-- Quarkus Maven Plugin -->
+                <plugin>
+                    <groupId>${quarkus.platform.group-id}</groupId>
+                    <artifactId>quarkus-maven-plugin</artifactId>
+                    <version>${quarkus.platform.version}</version>
+                    <extensions>true</extensions>
+                </plugin>
+
+                <!-- Java Compiler -->
+                <plugin>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>${compiler-plugin.version}</version>
+                    <configuration>
+                        <parameters>true</parameters>
+                    </configuration>
+                </plugin>
+
+                <!-- Unit Tests -->
+                <plugin>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>${surefire-plugin.version}</version>
+                    <configuration>
+                        <argLine>@{argLine}</argLine>
+                        <systemPropertyVariables>
+                            <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
+                            <maven.home>${maven.home}</maven.home>
+                        </systemPropertyVariables>
+                    </configuration>
+                </plugin>
+
+                <!-- Integration Tests -->
+                <plugin>
+                    <artifactId>maven-failsafe-plugin</artifactId>
+                    <version>${surefire-plugin.version}</version>
+                    <executions>
+                        <execution>
+                            <goals>
+                                <goal>integration-test</goal>
+                                <goal>verify</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                    <configuration>
+                        <argLine>@{argLine}</argLine>
+                        <systemPropertyVariables>
+                            <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
+                            <maven.home>${maven.home}</maven.home>
+                        </systemPropertyVariables>
+                    </configuration>
+                </plugin>
+
+                <!-- OpenAPI Generator -->
+                <plugin>
+                    <groupId>org.openapitools</groupId>
+                    <artifactId>openapi-generator-maven-plugin</artifactId>
+                    <version>${openapi-generator.version}</version>
+                </plugin>
+
+                <!-- Build Helper — generált forráskód regisztrálása -->
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>build-helper-maven-plugin</artifactId>
+                    <version>${build-helper-plugin.version}</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+</project>

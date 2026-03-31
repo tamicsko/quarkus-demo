@@ -1,0 +1,60 @@
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+release.properties
+.flattened-pom.xml
+
+# Eclipse
+.project
+.classpath
+.settings/
+bin/
+
+# IntelliJ
+.idea
+*.ipr
+*.iml
+*.iws
+
+# NetBeans
+nb-configuration.xml
+
+# Visual Studio Code
+.vscode
+.factorypath
+
+# OSX
+.DS_Store
+
+# Vim
+*.swp
+*.swo
+
+# patch
+*.orig
+*.rej
+
+# Local environment
+.env
+
+# Quarkus
+/.quarkus/cli/plugins/
+.certs/
+
+# Docker secrets (soha ne commitold!)
+deployment/container/secrets/
+
+# Node (Angular frontend)
+node_modules/
+frontend/dist/
+
+# OpenAPI generált kód (build-kor újragenerálódik)
+**/generated-sources/
+
+# Claude Code
+.claude/
+
+# Docs (nem commitoljuk)
+docs/

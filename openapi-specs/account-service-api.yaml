@@ -1,0 +1,375 @@
+openapi: 3.0.3
+info:
+  title: Account Service API
+  description: Számlakezelés — bankszámlák CRUD, egyenleg műveletek (credit/debit), egyenleg történet
+  version: 1.0.0
+
+tags:
+  - name: Account
+    description: Számla műveletek
+
+paths:
+  /api/accounts:
+    get:
+      tags: [Account]
+      operationId: listAccounts
+      summary: Számlák listázása (opcionális szűrés customerId-re)
+      parameters:
+        - name: customerId
+          in: query
+          required: false
+          description: Szűrés ügyfél azonosítóra
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: Számlák listája
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AccountDto"
+
+    post:
+      tags: [Account]
+      operationId: createAccount
+      summary: Új számla nyitása
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAccountRequest"
+      responses:
+        "201":
+          description: Számla sikeresen létrehozva
+          headers:
+            Location:
+              description: Az új számla URL-je
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountDto"
+        "409":
+          description: Már létezik számla ezzel a számlaszámmal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/accounts/{id}:
+    get:
+      tags: [Account]
+      operationId: getAccount
+      summary: Számla lekérése azonosító alapján
+      parameters:
+        - $ref: "#/components/parameters/AccountId"
+      responses:
+        "200":
+          description: Számla adatai
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountDto"
+        "404":
+          description: Számla nem található
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/accounts/{id}/status:
+    put:
+      tags: [Account]
+      operationId: updateAccountStatus
+      summary: Számla státusz módosítása (ACTIVE/FROZEN/CLOSED)
+      parameters:
+        - $ref: "#/components/parameters/AccountId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAccountStatusRequest"
+      responses:
+        "200":
+          description: Számla státusz frissítve
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountDto"
+        "404":
+          description: Számla nem található
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/accounts/{id}/balance:
+    get:
+      tags: [Account]
+      operationId: getBalance
+      summary: Egyenleg lekérése
+      parameters:
+        - $ref: "#/components/parameters/AccountId"
+      responses:
+        "200":
+          description: Aktuális egyenleg
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BalanceDto"
+        "404":
+          description: Számla nem található
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/accounts/{id}/balance/credit:
+    post:
+      tags: [Account]
+      operationId: creditAccount
+      summary: Jóváírás (egyenleg növelés)
+      parameters:
+        - $ref: "#/components/parameters/AccountId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BalanceOperationRequest"
+      responses:
+        "200":
+          description: Jóváírás sikeres, frissített egyenleg
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BalanceDto"
+        "404":
+          description: Számla nem található
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "400":
+          description: Érvénytelen összeg vagy számla nem aktív
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/accounts/{id}/balance/debit:
+    post:
+      tags: [Account]
+      operationId: debitAccount
+      summary: Terhelés (egyenleg csökkentés)
+      parameters:
+        - $ref: "#/components/parameters/AccountId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BalanceOperationRequest"
+      responses:
+        "200":
+          description: Terhelés sikeres, frissített egyenleg
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BalanceDto"
+        "404":
+          description: Számla nem található
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "400":
+          description: Nincs elegendő fedezet, érvénytelen összeg, vagy számla nem aktív
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/accounts/{id}/balance-history:
+    get:
+      tags: [Account]
+      operationId: getBalanceHistory
+      summary: Egyenleg változás történet
+      parameters:
+        - $ref: "#/components/parameters/AccountId"
+      responses:
+        "200":
+          description: Egyenleg változások listája
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BalanceHistoryDto"
+        "404":
+          description: Számla nem található
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  parameters:
+    AccountId:
+      name: id
+      in: path
+      required: true
+      description: Számla azonosító
+      schema:
+        type: integer
+        format: int64
+
+  schemas:
+    AccountDto:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        accountNumber:
+          type: string
+          description: IBAN formátumú számlaszám
+          example: "HU42-1234-5678-9012-3456-7890-1234"
+        customerId:
+          type: integer
+          format: int64
+          description: Tulajdonos ügyfél azonosító
+        accountType:
+          $ref: "#/components/schemas/AccountType"
+        balance:
+          type: number
+          format: double
+          description: Aktuális egyenleg
+        currency:
+          $ref: "#/components/schemas/Currency"
+        status:
+          $ref: "#/components/schemas/AccountStatus"
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateAccountRequest:
+      type: object
+      required:
+        - accountNumber
+        - customerId
+        - accountType
+        - currency
+      properties:
+        accountNumber:
+          type: string
+          description: IBAN formátumú számlaszám
+          example: "HU42-1234-5678-9012-3456-7890-1234"
+        customerId:
+          type: integer
+          format: int64
+          description: Tulajdonos ügyfél azonosító
+        accountType:
+          $ref: "#/components/schemas/AccountType"
+        currency:
+          $ref: "#/components/schemas/Currency"
+        initialBalance:
+          type: number
+          format: double
+          description: Kezdő egyenleg (alapértelmezés 0)
+          default: 0.0
+
+    UpdateAccountStatusRequest:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          $ref: "#/components/schemas/AccountStatus"
+
+    BalanceDto:
+      type: object
+      properties:
+        accountId:
+          type: integer
+          format: int64
+        balance:
+          type: number
+          format: double
+        currency:
+          $ref: "#/components/schemas/Currency"
+
+    BalanceOperationRequest:
+      type: object
+      required:
+        - amount
+        - reason
+      properties:
+        amount:
+          type: number
+          format: double
+          description: Összeg (pozitív szám)
+          example: 50000.00
+        reason:
+          type: string
+          description: A művelet oka (logoláshoz, balance_history-hoz)
+          example: "Transfer TX-abc123"
+
+    BalanceHistoryDto:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        accountId:
+          type: integer
+          format: int64
+        oldBalance:
+          type: number
+          format: double
+        newBalance:
+          type: number
+          format: double
+        changeAmount:
+          type: number
+          format: double
+        reason:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    AccountType:
+      type: string
+      enum:
+        - CHECKING
+        - SAVINGS
+
+    AccountStatus:
+      type: string
+      enum:
+        - ACTIVE
+        - FROZEN
+        - CLOSED
+
+    Currency:
+      type: string
+      enum:
+        - HUF
+        - EUR
+        - USD
+
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        timestamp:
+          type: string
+          format: date-time

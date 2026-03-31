@@ -1,0 +1,499 @@
+openapi: 3.0.3
+info:
+  title: Backend API (BFF)
+  description: |
+    Backend For Frontend — use-case orchestráció.
+    Ez az API-t hívja az Angular frontend.
+    A backend több service-t hív össze és saját DTO-kat ad vissza.
+  version: 1.0.0
+
+tags:
+  - name: Client
+    description: Ügyfélkezelés (orchestráció — Customer + Account Service)
+  - name: Transfer
+    description: Átutalás (orchestráció — Customer + Account + Transaction Service)
+  - name: Statement
+    description: Számla kivonat (orchestráció — Account + Transaction Service)
+
+paths:
+  # ===========================================================================
+  # CLIENT (ügyfél) végpontok
+  # ===========================================================================
+  /api/clients:
+    get:
+      tags: [Client]
+      operationId: listClients
+      summary: Ügyfelek listázása
+      responses:
+        "200":
+          description: Ügyfelek listája
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ClientSummaryDto"
+
+    post:
+      tags: [Client]
+      operationId: registerClient
+      summary: Új ügyfél regisztrálása számlanyitással
+      description: |
+        Use-case orchestráció:
+        1. Customer Service — ügyfél létrehozása
+        2. Account Service — számla nyitása
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterClientRequest"
+      responses:
+        "201":
+          description: Ügyfél és számla sikeresen létrehozva
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientDetailDto"
+        "409":
+          description: Már létezik ügyfél ezzel az adóazonosítóval
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/clients/{id}:
+    get:
+      tags: [Client]
+      operationId: getClientDetail
+      summary: Ügyfél összesítő (adatok + számlák)
+      description: |
+        Orchestráció: Customer Service (adatok) + Account Service (számlák)
+      parameters:
+        - $ref: "#/components/parameters/ClientId"
+      responses:
+        "200":
+          description: Ügyfél részletes adatai a számláival
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientDetailDto"
+        "404":
+          description: Ügyfél nem található
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/clients/{id}/accounts:
+    get:
+      tags: [Client]
+      operationId: getClientAccounts
+      summary: Ügyfél számlái
+      parameters:
+        - $ref: "#/components/parameters/ClientId"
+      responses:
+        "200":
+          description: Ügyfélhez tartozó számlák
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AccountInfoDto"
+
+    post:
+      tags: [Client]
+      operationId: openAccount
+      summary: Új számla nyitása ügyfélnek
+      description: |
+        Orchestráció:
+        1. Customer Service — ügyfél ellenőrzése (létezik? ACTIVE?)
+        2. Account Service — számla nyitása
+      parameters:
+        - $ref: "#/components/parameters/ClientId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OpenAccountRequest"
+      responses:
+        "201":
+          description: Számla sikeresen megnyitva
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountInfoDto"
+        "404":
+          description: Ügyfél nem található
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "400":
+          description: Ügyfél nem aktív
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ===========================================================================
+  # TRANSFER (átutalás) végpontok
+  # ===========================================================================
+  /api/transfer:
+    post:
+      tags: [Transfer]
+      operationId: initiateTransfer
+      summary: Átutalás indítása
+      description: |
+        Orchestráció:
+        1. Customer Service — küldő ügyfél ellenőrzése (ACTIVE?)
+        2. Account Service — küldő számla ellenőrzése (ACTIVE? fedezet?)
+        3. Account Service — fogadó számla ellenőrzése (ACTIVE?)
+        4. Transaction Service — tranzakció indítása
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransferRequest"
+      responses:
+        "201":
+          description: Átutalás elindítva
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransferResultDto"
+        "400":
+          description: Validációs hiba (nem aktív számla, nincs fedezet, stb.)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Számla nem található
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/transfer/{ref}/status:
+    get:
+      tags: [Transfer]
+      operationId: getTransferStatus
+      summary: Átutalás státusz lekérése
+      parameters:
+        - name: ref
+          in: path
+          required: true
+          description: Tranzakció referencia (UUID)
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Átutalás státusz
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransferStatusDto"
+        "404":
+          description: Tranzakció nem található
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ===========================================================================
+  # STATEMENT (számla kivonat) végpont
+  # ===========================================================================
+  /api/accounts/{id}/statement:
+    get:
+      tags: [Statement]
+      operationId: getAccountStatement
+      summary: Számla kivonat (egyenleg + tranzakciók)
+      description: |
+        Orchestráció:
+        1. Account Service — számla adatok + egyenleg
+        2. Transaction Service — tranzakciók az adott számlára
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Számla azonosító
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: Számla kivonat
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountStatementDto"
+        "404":
+          description: Számla nem található
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  parameters:
+    ClientId:
+      name: id
+      in: path
+      required: true
+      description: Ügyfél azonosító
+      schema:
+        type: integer
+        format: int64
+
+  schemas:
+    # =========================================================================
+    # CLIENT DTO-k
+    # =========================================================================
+    ClientSummaryDto:
+      type: object
+      description: Ügyfél összefoglaló (lista nézethez)
+      properties:
+        id:
+          type: integer
+          format: int64
+        taxId:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        status:
+          type: string
+          enum: [ACTIVE, SUSPENDED, CLOSED]
+        accountCount:
+          type: integer
+          description: Számlák száma
+
+    ClientDetailDto:
+      type: object
+      description: Ügyfél részletes nézet (adatok + összes számla)
+      properties:
+        id:
+          type: integer
+          format: int64
+        taxId:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        status:
+          type: string
+          enum: [ACTIVE, SUSPENDED, CLOSED]
+        createdAt:
+          type: string
+          format: date-time
+        accounts:
+          type: array
+          items:
+            $ref: "#/components/schemas/AccountInfoDto"
+
+    RegisterClientRequest:
+      type: object
+      required:
+        - taxId
+        - firstName
+        - lastName
+        - email
+        - accountNumber
+        - accountType
+        - currency
+      properties:
+        taxId:
+          type: string
+          example: "8461234567"
+        firstName:
+          type: string
+          example: "János"
+        lastName:
+          type: string
+          example: "Kovács"
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        accountNumber:
+          type: string
+          description: Első számla számlaszáma (IBAN)
+        accountType:
+          type: string
+          enum: [CHECKING, SAVINGS]
+        currency:
+          type: string
+          enum: [HUF, EUR, USD]
+
+    # =========================================================================
+    # ACCOUNT DTO-k (BFF saját nézete)
+    # =========================================================================
+    AccountInfoDto:
+      type: object
+      description: Számla infó (BFF nézet)
+      properties:
+        id:
+          type: integer
+          format: int64
+        accountNumber:
+          type: string
+        accountType:
+          type: string
+          enum: [CHECKING, SAVINGS]
+        balance:
+          type: number
+          format: double
+        currency:
+          type: string
+          enum: [HUF, EUR, USD]
+        status:
+          type: string
+          enum: [ACTIVE, FROZEN, CLOSED]
+
+    OpenAccountRequest:
+      type: object
+      required:
+        - accountNumber
+        - accountType
+        - currency
+      properties:
+        accountNumber:
+          type: string
+        accountType:
+          type: string
+          enum: [CHECKING, SAVINGS]
+        currency:
+          type: string
+          enum: [HUF, EUR, USD]
+        initialBalance:
+          type: number
+          format: double
+          default: 0.0
+
+    # =========================================================================
+    # TRANSFER DTO-k
+    # =========================================================================
+    TransferRequest:
+      type: object
+      required:
+        - fromAccountId
+        - toAccountId
+        - amount
+        - currency
+      properties:
+        fromAccountId:
+          type: integer
+          format: int64
+        toAccountId:
+          type: integer
+          format: int64
+        amount:
+          type: number
+          format: double
+          example: 50000.00
+        currency:
+          type: string
+          example: "HUF"
+
+    TransferResultDto:
+      type: object
+      properties:
+        transactionRef:
+          type: string
+          format: uuid
+          description: Tranzakció referencia (ezzel kérdezhető le a státusz)
+        status:
+          type: string
+          enum: [PENDING, COMPLETED, FAILED]
+        message:
+          type: string
+
+    TransferStatusDto:
+      type: object
+      properties:
+        transactionRef:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [PENDING, COMPLETED, FAILED, REVERSED]
+        failureReason:
+          type: string
+          nullable: true
+
+    # =========================================================================
+    # STATEMENT DTO-k
+    # =========================================================================
+    AccountStatementDto:
+      type: object
+      description: Számla kivonat — számla adatok + tranzakció történet
+      properties:
+        accountId:
+          type: integer
+          format: int64
+        accountNumber:
+          type: string
+        balance:
+          type: number
+          format: double
+        currency:
+          type: string
+        status:
+          type: string
+        transactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/StatementTransactionDto"
+
+    StatementTransactionDto:
+      type: object
+      description: Tranzakció a kivonatban
+      properties:
+        transactionRef:
+          type: string
+          format: uuid
+        direction:
+          type: string
+          enum: [INCOMING, OUTGOING]
+          description: Az adott számla szemszögéből bejövő vagy kimenő
+        counterpartyAccountId:
+          type: integer
+          format: int64
+          description: A másik fél számla azonosítója
+        amount:
+          type: number
+          format: double
+        currency:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, COMPLETED, FAILED, REVERSED]
+        createdAt:
+          type: string
+          format: date-time
+
+    # =========================================================================
+    # KÖZÖS
+    # =========================================================================
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        timestamp:
+          type: string
+          format: date-time

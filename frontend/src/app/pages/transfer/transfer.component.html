@@ -1,0 +1,65 @@
+<h1>Transfer</h1>
+
+<mat-card class="transfer-card">
+  <mat-card-header>
+    <mat-card-title>Initiate Transfer</mat-card-title>
+  </mat-card-header>
+  <mat-card-content>
+    <div class="form-grid">
+      <mat-form-field>
+        <mat-label>From Account ID</mat-label>
+        <input matInput type="number" [(ngModel)]="request.fromAccountId" required>
+      </mat-form-field>
+      <mat-form-field>
+        <mat-label>To Account ID</mat-label>
+        <input matInput type="number" [(ngModel)]="request.toAccountId" required>
+      </mat-form-field>
+      <mat-form-field>
+        <mat-label>Amount</mat-label>
+        <input matInput type="number" [(ngModel)]="request.amount" required>
+      </mat-form-field>
+      <mat-form-field>
+        <mat-label>Currency</mat-label>
+        <mat-select [(ngModel)]="request.currency">
+          <mat-option value="HUF">HUF</mat-option>
+          <mat-option value="EUR">EUR</mat-option>
+          <mat-option value="USD">USD</mat-option>
+        </mat-select>
+      </mat-form-field>
+    </div>
+  </mat-card-content>
+  <mat-card-actions>
+    <button mat-raised-button color="primary" (click)="submit()" [disabled]="loading()">
+      @if (loading()) {
+        <mat-spinner diameter="20"></mat-spinner>
+      } @else {
+        <ng-container><mat-icon>send</mat-icon> Send Transfer</ng-container>
+      }
+    </button>
+  </mat-card-actions>
+</mat-card>
+
+@if (result(); as r) {
+  <mat-card class="result-card" [class]="'result-' + r.status?.toLowerCase()">
+    <mat-card-header>
+      <mat-icon mat-card-avatar>{{ r.status === 'COMPLETED' ? 'check_circle' : 'error' }}</mat-icon>
+      <mat-card-title>{{ r.status }}</mat-card-title>
+      <mat-card-subtitle>Ref: {{ r.transactionRef }}</mat-card-subtitle>
+    </mat-card-header>
+    <mat-card-content>
+      <p>{{ r.message }}</p>
+    </mat-card-content>
+  </mat-card>
+}
+
+@if (error(); as err) {
+  <mat-card class="result-card result-failed">
+    <mat-card-header>
+      <mat-icon mat-card-avatar>error</mat-icon>
+      <mat-card-title>Error</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <p>{{ err }}</p>
+    </mat-card-content>
+  </mat-card>
+}
