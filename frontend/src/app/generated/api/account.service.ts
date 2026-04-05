@@ -51,10 +51,10 @@ export class AccountService extends BaseService {
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public depositToAccount(id: number, depositRequest: DepositRequest, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<AccountInfoDto>;
-    public depositToAccount(id: number, depositRequest: DepositRequest, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<AccountInfoDto>>;
-    public depositToAccount(id: number, depositRequest: DepositRequest, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<AccountInfoDto>>;
-    public depositToAccount(id: number, depositRequest: DepositRequest, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public depositToAccount(id: string, depositRequest: DepositRequest, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<AccountInfoDto>;
+    public depositToAccount(id: string, depositRequest: DepositRequest, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<AccountInfoDto>>;
+    public depositToAccount(id: string, depositRequest: DepositRequest, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<AccountInfoDto>>;
+    public depositToAccount(id: string, depositRequest: DepositRequest, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         if (id === null || id === undefined) {
             throw new Error('Required parameter id was null or undefined when calling depositToAccount.');
         }
@@ -96,7 +96,7 @@ export class AccountService extends BaseService {
             }
         }
 
-        let localVarPath = `/api/accounts/${this.configuration.encodeParam({name: "id", value: id, in: "path", style: "simple", explode: false, dataType: "number", dataFormat: "int64"})}/deposit`;
+        let localVarPath = `/api/accounts/${this.configuration.encodeParam({name: "id", value: id, in: "path", style: "simple", explode: false, dataType: "string", dataFormat: "uuid"})}/deposit`;
         const { basePath, withCredentials } = this.configuration;
         return this.httpClient.request<AccountInfoDto>('post', `${basePath}${localVarPath}`,
             {
@@ -122,10 +122,10 @@ export class AccountService extends BaseService {
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public withdrawFromAccount(id: number, withdrawRequest: WithdrawRequest, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<AccountInfoDto>;
-    public withdrawFromAccount(id: number, withdrawRequest: WithdrawRequest, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<AccountInfoDto>>;
-    public withdrawFromAccount(id: number, withdrawRequest: WithdrawRequest, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<AccountInfoDto>>;
-    public withdrawFromAccount(id: number, withdrawRequest: WithdrawRequest, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public withdrawFromAccount(id: string, withdrawRequest: WithdrawRequest, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<AccountInfoDto>;
+    public withdrawFromAccount(id: string, withdrawRequest: WithdrawRequest, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<AccountInfoDto>>;
+    public withdrawFromAccount(id: string, withdrawRequest: WithdrawRequest, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<AccountInfoDto>>;
+    public withdrawFromAccount(id: string, withdrawRequest: WithdrawRequest, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         if (id === null || id === undefined) {
             throw new Error('Required parameter id was null or undefined when calling withdrawFromAccount.');
         }
@@ -167,7 +167,7 @@ export class AccountService extends BaseService {
             }
         }
 
-        let localVarPath = `/api/accounts/${this.configuration.encodeParam({name: "id", value: id, in: "path", style: "simple", explode: false, dataType: "number", dataFormat: "int64"})}/withdraw`;
+        let localVarPath = `/api/accounts/${this.configuration.encodeParam({name: "id", value: id, in: "path", style: "simple", explode: false, dataType: "string", dataFormat: "uuid"})}/withdraw`;
         const { basePath, withCredentials } = this.configuration;
         return this.httpClient.request<AccountInfoDto>('post', `${basePath}${localVarPath}`,
             {

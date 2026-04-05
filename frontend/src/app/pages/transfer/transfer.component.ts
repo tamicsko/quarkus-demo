@@ -14,7 +14,7 @@ import {
 } from '../../generated';
 
 interface AccountOption {
-  accountId: number;
+  accountId: string;
   label: string;
   currency: string;
 }
@@ -32,8 +32,8 @@ interface AccountOption {
 })
 export class TransferComponent implements OnInit {
   request: TransferRequest = {
-    fromAccountId: 0,
-    toAccountId: 0,
+    fromAccountId: '',
+    toAccountId: '',
     amount: 0,
     currency: 'HUF'
   };

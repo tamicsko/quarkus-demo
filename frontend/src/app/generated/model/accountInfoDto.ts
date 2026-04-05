@@ -13,7 +13,7 @@
  * Számla infó (BFF nézet)
  */
 export interface AccountInfoDto { 
-    id?: number;
+    id?: string;
     accountNumber?: string;
     accountType?: AccountInfoDto.AccountTypeEnum;
     balance?: number;

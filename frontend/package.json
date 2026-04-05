@@ -7,7 +7,7 @@
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "generate-api": "openapi-generator-cli generate -i ../openapi-specs/backend-api.yaml -g typescript-angular -o src/app/generated --additional-properties=ngVersion=21"
+    "generate-api": "openapi-generator-cli generate -i ../openapi-specs/backend-api.yaml -g typescript-angular -o src/app/generated --additional-properties=ngVersion=21 --type-mappings=UUID=string"
   },
   "private": true,
   "packageManager": "npm@11.11.0",

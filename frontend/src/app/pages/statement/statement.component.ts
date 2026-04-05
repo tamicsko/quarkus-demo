@@ -22,7 +22,7 @@ import { StatementService, AccountStatementDto } from '../../generated';
 export class StatementComponent implements OnInit {
   statement = signal<AccountStatementDto | null>(null);
   txColumns = ['direction', 'counterparty', 'amount', 'currency', 'status', 'date'];
-  clientId: number | null = null;
+  clientId: string | null = null;
 
   constructor(
     private route: ActivatedRoute,
@@ -31,8 +31,8 @@ export class StatementComponent implements OnInit {
   ) {}
 
   ngOnInit() {
-    const id = Number(this.route.snapshot.paramMap.get('id'));
-    this.clientId = Number(this.route.snapshot.queryParamMap.get('clientId')) || null;
+    const id = this.route.snapshot.paramMap.get('id')!;
+    this.clientId = this.route.snapshot.queryParamMap.get('clientId') || null;
     this.statementService.getAccountStatement(id).subscribe(s => this.statement.set(s));
   }
 

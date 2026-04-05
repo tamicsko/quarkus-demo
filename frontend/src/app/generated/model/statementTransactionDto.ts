@@ -21,7 +21,7 @@ export interface StatementTransactionDto {
     /**
      * A másik fél számla azonosítója (null befizetés/kifizetés esetén)
      */
-    counterpartyAccountId?: number | null;
+    counterpartyAccountId?: string | null;
     /**
      * Befizetés/kifizetés oka
      */

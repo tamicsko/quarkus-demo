@@ -10,8 +10,8 @@
 
 
 export interface TransferRequest { 
-    fromAccountId: number;
-    toAccountId: number;
+    fromAccountId: string;
+    toAccountId: string;
     amount: number;
     currency: string;
 }

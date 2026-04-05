@@ -45,7 +45,7 @@ export class ClientDetailComponent implements OnInit {
   }
 
   loadClient() {
-    const id = Number(this.route.snapshot.paramMap.get('id'));
+    const id = this.route.snapshot.paramMap.get('id')!;
     this.clientService.getClientDetail(id).subscribe(detail => this.client.set(detail));
   }
 
@@ -61,7 +61,7 @@ export class ClientDetailComponent implements OnInit {
     const dialogRef = this.dialog.open(NewAccountDialogComponent, { width: '450px' });
     dialogRef.afterClosed().subscribe(result => {
       if (result) {
-        const clientId = Number(this.route.snapshot.paramMap.get('id'));
+        const clientId = this.route.snapshot.paramMap.get('id')!;
         this.clientService.openAccount(clientId, result).subscribe({
           next: () => {
             this.snackBar.open('Account opened successfully!', 'OK', { duration: 3000 });

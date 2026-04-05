@@ -13,7 +13,7 @@
  * Ügyfél összefoglaló (lista nézethez)
  */
 export interface ClientSummaryDto { 
-    id?: number;
+    id?: string;
     taxId?: string;
     firstName?: string;
     lastName?: string;

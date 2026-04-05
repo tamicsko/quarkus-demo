@@ -14,7 +14,7 @@ import { StatementTransactionDto } from './statementTransactionDto';
  * Számla kivonat — számla adatok + tranzakció történet
  */
 export interface AccountStatementDto { 
-    accountId?: number;
+    accountId?: string;
     accountNumber?: string;
     balance?: number;
     currency?: string;

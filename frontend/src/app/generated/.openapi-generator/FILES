@@ -9,7 +9,6 @@ api/statement.service.ts
 api/transfer.service.ts
 configuration.ts
 encoder.ts
-git_push.sh
 index.ts
 model/accountInfoDto.ts
 model/accountStatementDto.ts

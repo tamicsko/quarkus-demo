@@ -14,7 +14,7 @@ import { AccountInfoDto } from './accountInfoDto';
  * Ügyfél részletes nézet (adatok + összes számla)
  */
 export interface ClientDetailDto { 
-    id?: number;
+    id?: string;
     taxId?: string;
     firstName?: string;
     lastName?: string;
