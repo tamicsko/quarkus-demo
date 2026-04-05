@@ -787,6 +787,10 @@ clean_redhat_sandbox() {
         return
     fi
     down_redhat_sandbox
+    info "Keepalive RBAC törlése..."
+    oc delete rolebinding keepalive-binding -n "$OC_NAMESPACE" --ignore-not-found 2>/dev/null || true
+    oc delete role keepalive-role -n "$OC_NAMESPACE" --ignore-not-found 2>/dev/null || true
+    oc delete sa keepalive -n "$OC_NAMESPACE" --ignore-not-found 2>/dev/null || true
     info "PVC-k törlése..."
     oc delete pvc --all -n "$OC_NAMESPACE" --ignore-not-found 2>/dev/null || true
     ok "Sandbox teljesen kitakarítva"

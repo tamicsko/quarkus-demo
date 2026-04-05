@@ -28,8 +28,37 @@ spec:
     - name: shared-workspace
 
   tasks:
+    # ----- 0. Cleanup old PipelineRuns (pod quota!) -----
+    - name: cleanup-old-runs
+      taskRef:
+        resolver: cluster
+        params:
+          - name: kind
+            value: task
+          - name: name
+            value: openshift-client
+          - name: namespace
+            value: openshift-pipelines
+      params:
+        - name: SCRIPT
+          value: |
+            echo "=== Cleaning up old PipelineRuns ==="
+            # Succeeded runok törlése (az aktuálisan futót a status szűrő kihagyja)
+            OLD_RUNS=$(oc get pipelinerun -n tamicsko-dev \
+              -o jsonpath='{range .items[?(@.status.conditions[0].reason=="Succeeded")]}{.metadata.name}{"\n"}{end}' 2>/dev/null)
+            if [[ -n "$OLD_RUNS" ]]; then
+              echo "$OLD_RUNS" | xargs oc delete pipelinerun -n tamicsko-dev
+              echo "Deleted old runs"
+            else
+              echo "No old runs to clean up"
+            fi
+            # Pod count ellenőrzés
+            POD_COUNT=$(oc get pods -n tamicsko-dev --no-headers 2>/dev/null | wc -l)
+            echo "Current pod count: $POD_COUNT / 50"
+
     # ----- 1. Git Clone -----
     - name: git-clone
+      runAfter: [cleanup-old-runs]
       taskRef:
         resolver: cluster
         params:
