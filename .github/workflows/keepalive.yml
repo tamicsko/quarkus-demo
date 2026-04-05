@@ -113,31 +113,15 @@ jobs:
           echo "=== Deployments missing — triggering pipeline ==="
 
           # Ellenőrizzük hogy a pipeline infra létezik-e
-          if ! oc get pipeline/bank-demo-pipeline -n "$NS" &>/dev/null; then
+          if ! oc get pipeline.tekton.dev/bank-demo-pipeline -n "$NS" &>/dev/null; then
             echo "ERROR: Pipeline not found — run 'bank-demo-ctl up redhat-sandbox --infra' first"
             exit 1
           fi
 
           # PipelineRun létrehozása
-          cat <<'PIPELINERUN' | oc create -n "$NS" -f -
-          apiVersion: tekton.dev/v1
-          kind: PipelineRun
-          metadata:
-            generateName: bank-demo-run-
-          spec:
-            pipelineRef:
-              name: bank-demo-pipeline
-            serviceAccountName: pipeline
-            params:
-              - name: git-url
-                value: "https://github.com/tamicsko/quarkus-demo.git"
-              - name: git-revision
-                value: "main"
-            workspaces:
-              - name: shared-workspace
-                persistentVolumeClaim:
-                  claimName: pipeline-workspace
-          PIPELINERUN
+          oc create -n "$NS" -f - <<'EOF'
+          {"apiVersion":"tekton.dev/v1","kind":"PipelineRun","metadata":{"generateName":"bank-demo-run-"},"spec":{"pipelineRef":{"name":"bank-demo-pipeline"},"serviceAccountName":"pipeline","params":[{"name":"git-url","value":"https://github.com/tamicsko/quarkus-demo.git"},{"name":"git-revision","value":"main"}],"workspaces":[{"name":"shared-workspace","persistentVolumeClaim":{"claimName":"pipeline-workspace"}}]}}
+          EOF
 
           echo "Pipeline triggered — waiting for completion..."
 
