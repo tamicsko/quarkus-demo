@@ -84,6 +84,18 @@ Builds and deploys via Tekton pipeline. Git push triggers automatically.
 
 See [Sandbox Setup Guide](docs/openshift/sandbox-setup.md) for detailed instructions.
 
+### Seed Data
+
+Load deterministic test data (5 customers, 7 accounts, 3 transactions with fixed UUIDs):
+
+```bash
+./bank-demo-ctl seed local-manual           # load seed data
+./bank-demo-ctl seed local-manual --clean    # remove seed data
+./bank-demo-ctl seed redhat-sandbox          # works on any target
+```
+
+Idempotent — safe to run multiple times. See [tests/seed/README.md](tests/seed/README.md) for details.
+
 ## Documentation
 
 | Topic | Link |

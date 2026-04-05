@@ -11,8 +11,21 @@ All environments are managed via `bank-demo-ctl` from the project root.
 | `./bank-demo-ctl down <mode>` | Stop environment |
 | `./bank-demo-ctl logs <mode>` | Tail logs |
 | `./bank-demo-ctl clean <mode>` | Remove containers and volumes |
+| `./bank-demo-ctl seed <mode>` | Load test data (5 customers, 7 accounts, 3 transactions) |
+| `./bank-demo-ctl seed <mode> --clean` | Remove test data |
 
 Replace `<mode>` with `local-manual`, `local-docker`, or `redhat-sandbox`.
+
+### Seed Data
+
+After starting any environment, you can load deterministic test data with fixed UUIDs:
+
+```bash
+./bank-demo-ctl seed local-manual           # direct SQL insert into PostgreSQL
+./bank-demo-ctl seed local-manual --clean    # remove seed records by UUID
+```
+
+Idempotent — uses `ON CONFLICT DO NOTHING`, safe to run multiple times. Works on all targets via `docker exec` (local) or `oc exec` (sandbox). See [tests/seed/README.md](../../tests/seed/README.md) for data details.
 
 ---
 
