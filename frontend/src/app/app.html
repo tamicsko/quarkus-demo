@@ -1,9 +1,19 @@
 <mat-toolbar color="primary" class="app-toolbar">
-  <span>Bank Demo</span>
+  <span>{{ 'app.title' | translate }}</span>
   <span class="spacer"></span>
-  <a mat-button routerLink="/dashboard" routerLinkActive="active-link">Dashboard</a>
-  <a mat-button routerLink="/clients" routerLinkActive="active-link">Clients</a>
-  <a mat-button routerLink="/transfer" routerLinkActive="active-link">Transfer</a>
+  <a mat-button routerLink="/dashboard" routerLinkActive="active-link">{{ 'nav.dashboard' | translate }}</a>
+  <a mat-button routerLink="/clients" routerLinkActive="active-link">{{ 'nav.clients' | translate }}</a>
+  <a mat-button routerLink="/transfer" routerLinkActive="active-link">{{ 'nav.transfer' | translate }}</a>
+
+  <button mat-button [matMenuTriggerFor]="langMenu">
+    <mat-icon>language</mat-icon>
+    {{ currentLang | uppercase }}
+  </button>
+  <mat-menu #langMenu="matMenu">
+    <button mat-menu-item (click)="switchLang('hu')">Magyar</button>
+    <button mat-menu-item (click)="switchLang('en')">English</button>
+    <button mat-menu-item (click)="switchLang('de')">Deutsch</button>
+  </mat-menu>
 </mat-toolbar>
 
 <div class="app-content">

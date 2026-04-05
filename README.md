@@ -1,67 +1,107 @@
-# quarkus_demo
+# Bank Demo — Quarkus Microservices
 
-This project uses Quarkus, the Supersonic Subatomic Java Framework.
+Banking demo application: customer management, accounts, transfers. Quarkus backend (BFF + 3 microservices), Angular frontend, PostgreSQL.
 
-If you want to learn more about Quarkus, please visit its website: <https://quarkus.io/>.
+**Version:** 1.1.0
 
-## Running the application in dev mode
+## Architecture
 
-You can run your application in dev mode that enables live coding using:
-
-```shell script
-./mvnw quarkus:dev
+```
+Frontend (Angular/nginx :4200)
+    ↓
+Backend BFF (:8080)
+    ├→ Customer Service (:8081)
+    ├→ Account Service (:8082)
+    └→ Transaction Service (:8083)
+         ↓
+      PostgreSQL (:5432)
 ```
 
-> **_NOTE:_**  Quarkus now ships with a Dev UI, which is available in dev mode only at <http://localhost:8080/q/dev/>.
+See [Architecture Overview](docs/architecture/overview.md) for detailed design, API specs, and enterprise patterns.
 
-## Packaging and running the application
+## Project Structure
 
-The application can be packaged using:
-
-```shell script
-./mvnw package
+```
+quarkus_demo/
+  services/                  Microservices (behind the BFF)
+    customer-service/          Customer CRUD (:8081)
+    account-service/           Account management (:8082)
+    transaction-service/       Transaction processing (:8083)
+  backend/                   BFF — API gateway (:8080)
+  frontend/                  Angular + nginx (:4200)
+  openapi-specs/             OpenAPI YAML contracts (single source of truth)
+  deployment/
+    local-manual/              Docker Compose: PostgreSQL + pgAdmin
+    local-docker/              Docker Compose: full stack in containers
+    redhat-sandbox/            OpenShift manifests + Tekton CI/CD pipeline
+  bank-demo-ctl              CLI deployment tool
+  docs/                      Documentation
 ```
 
-It produces the `quarkus-run.jar` file in the `target/quarkus-app/` directory.
-Be aware that it’s not an _über-jar_ as the dependencies are copied into the `target/quarkus-app/lib/` directory.
+## Running the Application
 
-The application is now runnable using `java -jar target/quarkus-app/quarkus-run.jar`.
+All environments are managed by `bank-demo-ctl`:
 
-If you want to build an _über-jar_, execute the following command:
-
-```shell script
-./mvnw package -Dquarkus.package.jar.type=uber-jar
+```bash
+./bank-demo-ctl help
 ```
 
-The application, packaged as an _über-jar_, is now runnable using `java -jar target/*-runner.jar`.
+### Local Manual — development with hot-reload
 
-## Creating a native executable
+PostgreSQL + pgAdmin in Docker, Quarkus services in `quarkus:dev` mode with live coding.
 
-You can create a native executable using:
-
-```shell script
-./mvnw package -Dnative
+```bash
+./bank-demo-ctl up local-manual      # starts DB + all services
+./bank-demo-ctl status local-manual
+./bank-demo-ctl down local-manual
 ```
 
-Or, if you don't have GraalVM installed, you can run the native executable build in a container using:
+URLs: frontend `http://localhost:4200`, Swagger `http://localhost:8080/q/swagger-ui`, pgAdmin `http://localhost:5050`
 
-```shell script
-./mvnw package -Dnative -Dquarkus.native.container-build=true
+### Local Docker — full stack in containers
+
+Everything runs in Docker Compose. No hot-reload — tests containerized builds.
+
+```bash
+./bank-demo-ctl up local-docker
+./bank-demo-ctl status local-docker
+./bank-demo-ctl down local-docker
 ```
 
-You can then execute your native executable with: `./target/quarkus_demo-1.0.0-SNAPSHOT-runner`
+URLs: frontend `http://localhost:4200`, Swagger `http://localhost:8080/q/swagger-ui`
 
-If you want to learn more about building native executables, please consult <https://quarkus.io/guides/maven-tooling>.
+### Red Hat Developer Sandbox — OpenShift
 
-## Related Guides
+Builds and deploys via Tekton pipeline. Git push triggers automatically.
 
-- REST Jackson ([guide](https://quarkus.io/guides/rest#json-serialisation)): Jackson serialization support for Quarkus REST. This extension is not compatible with the quarkus-resteasy extension, or any of the extensions that depend on it
-- SmallRye OpenAPI ([guide](https://quarkus.io/guides/openapi-swaggerui)): Document your REST APIs with OpenAPI - comes with Swagger UI
+```bash
+./bank-demo-ctl up redhat-sandbox --infra   # infrastructure setup (DB, pipeline, webhook)
+./bank-demo-ctl up redhat-sandbox           # infra + pipeline run
+./bank-demo-ctl status redhat-sandbox
+./bank-demo-ctl down redhat-sandbox         # removes everything (PVCs remain)
+./bank-demo-ctl clean redhat-sandbox        # removes PVCs too
+```
 
-## Provided Code
+See [Sandbox Setup Guide](docs/openshift/sandbox-setup.md) for detailed instructions.
 
-### REST
+## Documentation
 
-Easily start your REST Web Services
+| Topic | Link |
+|---|---|
+| Architecture & patterns | [docs/architecture/overview.md](docs/architecture/overview.md) |
+| Frontend architecture | [docs/architecture/frontend.md](docs/architecture/frontend.md) |
+| Future patterns & roadmap | [docs/architecture/future-patterns.md](docs/architecture/future-patterns.md) |
+| Local environment setup | [docs/guides/local-setup.md](docs/guides/local-setup.md) |
+| Running modes guide | [docs/guides/running.md](docs/guides/running.md) |
+| OpenShift concepts | [docs/openshift/concepts.md](docs/openshift/concepts.md) |
+| Sandbox setup | [docs/openshift/sandbox-setup.md](docs/openshift/sandbox-setup.md) |
+| Tekton pipeline details | [docs/openshift/pipeline.md](docs/openshift/pipeline.md) |
 
-[Related guide section...](https://quarkus.io/guides/getting-started-reactive#reactive-jax-rs-resources)
+## Tech Stack
+
+- **Backend**: Quarkus 3.34, Java 21, Liquibase, RESTEasy, MicroProfile REST Client
+- **Frontend**: Angular 19, Angular Material, ngx-translate, nginx
+- **Database**: PostgreSQL 17 (schema-per-service isolation)
+- **API**: OpenAPI 3.0 contract-first (code generation for server + client)
+- **CI/CD**: Tekton Pipelines on OpenShift
+- **Container images**: Red Hat UBI9 (OpenJDK 21, nginx 1.24, Node.js 22)

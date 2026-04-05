@@ -10,6 +10,8 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatCardModule } from '@angular/material/card';
 import { MatChipsModule } from '@angular/material/chips';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { TranslateModule } from '@ngx-translate/core';
 import { ClientService, ClientSummaryDto, RegisterClientRequest } from '../../generated';
 
 @Component({
@@ -17,7 +19,8 @@ import { ClientService, ClientSummaryDto, RegisterClientRequest } from '../../ge
   imports: [
     RouterLink, FormsModule,
     MatTableModule, MatButtonModule, MatIconModule, MatCardModule,
-    MatFormFieldModule, MatInputModule, MatSelectModule, MatChipsModule
+    MatFormFieldModule, MatInputModule, MatSelectModule, MatChipsModule, MatTooltipModule,
+    TranslateModule
   ],
   templateUrl: './client-list.component.html',
   styleUrl: './client-list.component.scss'

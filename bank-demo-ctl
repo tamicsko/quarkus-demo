@@ -1,0 +1,916 @@
+#!/usr/bin/env bash
+# =============================================================================
+# bank-demo-ctl — Bank Demo deployment tool
+# =============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+DEPLOY_DIR="$SCRIPT_DIR/deployment"
+TARGETS=("local-manual" "local-docker" "redhat-sandbox")
+
+JAVA_SERVICES=(customer-service account-service transaction-service backend)
+ALL_SERVICES=("${JAVA_SERVICES[@]}" frontend)
+
+# Actual directory paths (3 microservices under services/, backend at root)
+JAVA_SERVICE_DIRS=(services/customer-service services/account-service services/transaction-service backend)
+
+OC_NAMESPACE="${BANK_DEMO_NAMESPACE:-tamicsko-dev}"
+
+# ── Color helpers ────────────────────────────────────────────────────────────
+
+if [[ -t 1 ]]; then
+    RED='\033[0;31m'    GREEN='\033[0;32m'  YELLOW='\033[0;33m'
+    BLUE='\033[0;34m'   BOLD='\033[1m'      NC='\033[0m'
+else
+    RED='' GREEN='' YELLOW='' BLUE='' BOLD='' NC=''
+fi
+
+info()    { echo -e "${BLUE}[INFO]${NC} $*"; }
+ok()      { echo -e "${GREEN}[OK]${NC} $*"; }
+warn()    { echo -e "${YELLOW}[WARN]${NC} $*"; }
+err()     { echo -e "${RED}[ERROR]${NC} $*" >&2; }
+heading() { echo -e "\n${BOLD}── $* ──${NC}"; }
+
+status_line() {
+    local name="$1" status="$2" color="$3"
+    printf "  %-30s %b%s%b\n" "$name" "$color" "$status" "$NC"
+}
+
+# ── Prerequisite checks ─────────────────────────────────────────────────────
+
+check_prereqs() {
+    local target="$1"
+    local missing=()
+
+    case "$target" in
+        local-manual)
+            command -v docker &>/dev/null || missing+=("docker")
+            ;;
+        local-docker)
+            command -v docker &>/dev/null || missing+=("docker")
+            ;;
+        redhat-sandbox)
+            command -v oc &>/dev/null || missing+=("oc (OpenShift CLI)")
+            if command -v oc &>/dev/null; then
+                oc whoami &>/dev/null 2>&1 || missing+=("oc login (not logged in — run: oc login --token=... --server=...)")
+            fi
+            ;;
+    esac
+
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        err "Missing prerequisites for $target:"
+        for m in "${missing[@]}"; do
+            echo "  - $m"
+        done
+        exit 1
+    fi
+}
+
+docker_compose_cmd() {
+    if docker compose version &>/dev/null 2>&1; then
+        echo "docker compose"
+    elif command -v docker-compose &>/dev/null; then
+        echo "docker-compose"
+    else
+        err "Neither 'docker compose' (V2) nor 'docker-compose' (V1) found"
+        exit 1
+    fi
+}
+
+mvn_cmd() {
+    if [[ -f "$SCRIPT_DIR/mvnw" ]]; then
+        echo "$SCRIPT_DIR/mvnw"
+    elif [[ -f "$SCRIPT_DIR/mvnw.cmd" ]] && [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
+        echo "$SCRIPT_DIR/mvnw.cmd"
+    elif command -v mvn &>/dev/null; then
+        echo "mvn"
+    else
+        err "Maven not found (no mvnw, no mvn in PATH)"
+        exit 1
+    fi
+}
+
+# ── Process helpers ──────────────────────────────────────────────────────────
+
+PHASE_TIMEOUT=300  # 5 minutes
+
+wait_for_health() {
+    local name="$1" url="$2" timeout="${3:-$PHASE_TIMEOUT}"
+    local elapsed=0
+    echo -n "  $name: waiting..."
+    while true; do
+        local code
+        code=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 1 "$url" 2>/dev/null || echo "000")
+        if [[ "$code" == "200" ]]; then
+            echo -e " ${GREEN}RUNNING${NC}"
+            return 0
+        fi
+        elapsed=$((elapsed + 2))
+        if [[ $elapsed -ge $timeout ]]; then
+            echo -e " ${RED}TIMEOUT (${timeout}s)${NC}"
+            return 1
+        fi
+        sleep 2
+    done
+}
+
+kill_port() {
+    local port="$1"
+    if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
+        local pid
+        pid=$(netstat -ano 2>/dev/null | grep ":$port " | grep LISTENING | awk '{print $5}' | head -1)
+        if [[ -n "$pid" ]]; then
+            taskkill //F //PID "$pid" &>/dev/null || true
+        fi
+    else
+        local pid
+        pid=$(lsof -ti ":$port" 2>/dev/null || true)
+        if [[ -n "$pid" ]]; then
+            kill "$pid" 2>/dev/null || true
+        fi
+    fi
+}
+
+# ── Maven build helper ──────────────────────────────────────────────────────
+
+build_maven_jars() {
+    local need_build=false
+    for svc in "${JAVA_SERVICE_DIRS[@]}"; do
+        if [[ ! -f "$SCRIPT_DIR/$svc/target/quarkus-app/quarkus-run.jar" ]]; then
+            need_build=true
+            break
+        fi
+    done
+
+    if [[ "$need_build" == "false" ]]; then
+        ok "JAR-ok megvannak, build kihagyva (használd a 'build' parancsot a kényszerített újraépítéshez)"
+        return 0
+    fi
+
+    info "Maven build (mvnw package -DskipTests)..."
+    cd "$SCRIPT_DIR"
+    $(mvn_cmd) package -DskipTests -q
+    ok "JAR-ok elkészültek"
+}
+
+# ── Status functions ─────────────────────────────────────────────────────────
+
+status_local_manual() {
+    heading "local-manual (PostgreSQL + pgAdmin)"
+    local compose
+    compose=$(docker_compose_cmd)
+    local compose_file="$DEPLOY_DIR/local-manual/docker-compose.yaml"
+
+    if [[ ! -f "$compose_file" ]]; then
+        warn "Compose fájl nem található: $compose_file"
+        return
+    fi
+
+    local running
+    running=$($compose -f "$compose_file" ps --format "{{.Name}} {{.State}}" 2>/dev/null || true)
+
+    if [[ -z "$running" ]]; then
+        status_line "PostgreSQL" "STOPPED" "$RED"
+        status_line "pgAdmin" "STOPPED" "$RED"
+    else
+        while IFS= read -r line; do
+            local name state
+            name=$(echo "$line" | awk '{print $1}')
+            state=$(echo "$line" | awk '{print $2}')
+            if [[ "$state" == "running" ]]; then
+                status_line "$name" "RUNNING" "$GREEN"
+            else
+                status_line "$name" "$state" "$YELLOW"
+            fi
+        done <<< "$running"
+    fi
+
+    # Check Quarkus dev processes via health endpoints
+    echo ""
+    info "Quarkus dev folyamatok (health check):"
+    local ports=(8081 8082 8083 8080 4200)
+    local names=("customer-service" "account-service" "transaction-service" "backend" "frontend")
+    for i in "${!ports[@]}"; do
+        local port="${ports[$i]}"
+        local svc_name="${names[$i]}"
+        local health_url="http://localhost:$port/q/health/ready"
+        # Frontend has no Quarkus health endpoint — just check if it responds
+        if [[ "$svc_name" == "frontend" ]]; then
+            health_url="http://localhost:$port"
+        fi
+        local code
+        code=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 1 "$health_url" 2>/dev/null || echo "000")
+        if [[ "$code" == "200" ]]; then
+            status_line "$svc_name (:$port)" "RUNNING" "$GREEN"
+        elif [[ "$code" =~ ^0+$ ]]; then
+            status_line "$svc_name (:$port)" "STOPPED" "$RED"
+        else
+            status_line "$svc_name (:$port)" "UNHEALTHY ($code)" "$YELLOW"
+        fi
+    done
+}
+
+status_local_docker() {
+    heading "local-docker (full stack Docker Compose)"
+    local compose
+    compose=$(docker_compose_cmd)
+    local compose_file="$DEPLOY_DIR/local-docker/docker-compose.yaml"
+
+    if [[ ! -f "$compose_file" ]]; then
+        warn "Compose fájl nem található: $compose_file"
+        return
+    fi
+
+    local running
+    running=$($compose -f "$compose_file" ps --format "{{.Name}} {{.State}} {{.Ports}}" 2>/dev/null || true)
+
+    if [[ -z "$running" ]]; then
+        for svc in postgres "${ALL_SERVICES[@]}"; do
+            status_line "$svc" "STOPPED" "$RED"
+        done
+    else
+        while IFS= read -r line; do
+            local name state
+            name=$(echo "$line" | awk '{print $1}')
+            state=$(echo "$line" | awk '{print $2}')
+            if [[ "$state" == "running" ]]; then
+                status_line "$name" "RUNNING" "$GREEN"
+            else
+                status_line "$name" "$state" "$YELLOW"
+            fi
+        done <<< "$running"
+    fi
+}
+
+status_redhat_sandbox() {
+    heading "redhat-sandbox (OpenShift: $OC_NAMESPACE)"
+
+    if ! command -v oc &>/dev/null; then
+        warn "oc CLI nem telepített"
+        return
+    fi
+    if ! oc whoami &>/dev/null 2>&1; then
+        warn "Nem vagy bejelentkezve (oc login --token=... --server=...)"
+        return
+    fi
+
+    info "Pods:"
+    local pods
+    pods=$(oc get pods -n "$OC_NAMESPACE" --no-headers 2>/dev/null || true)
+    if [[ -z "$pods" ]]; then
+        status_line "Nincs pod" "EMPTY" "$YELLOW"
+    else
+        while IFS= read -r line; do
+            local name ready status
+            name=$(echo "$line" | awk '{print $1}')
+            ready=$(echo "$line" | awk '{print $2}')
+            status=$(echo "$line" | awk '{print $3}')
+            if [[ "$status" == "Running" ]]; then
+                status_line "$name ($ready)" "RUNNING" "$GREEN"
+            else
+                status_line "$name ($ready)" "$status" "$YELLOW"
+            fi
+        done <<< "$pods"
+    fi
+
+    echo ""
+    info "Routes:"
+    local routes
+    routes=$(oc get routes -n "$OC_NAMESPACE" --no-headers 2>/dev/null || true)
+    if [[ -z "$routes" ]]; then
+        status_line "Nincs route" "—" "$YELLOW"
+    else
+        while IFS= read -r line; do
+            local name host
+            name=$(echo "$line" | awk '{print $1}')
+            host=$(echo "$line" | awk '{print $2}')
+            status_line "$name" "https://$host" "$GREEN"
+        done <<< "$routes"
+    fi
+}
+
+cmd_status() {
+    local target="${1:-}"
+    if [[ -z "$target" ]]; then
+        status_local_manual
+        status_local_docker
+        status_redhat_sandbox
+    else
+        validate_target "$target"
+        case "$target" in
+            local-manual)    status_local_manual ;;
+            local-docker)    status_local_docker ;;
+            redhat-sandbox)  status_redhat_sandbox ;;
+        esac
+    fi
+}
+
+# ── Up functions ─────────────────────────────────────────────────────────────
+
+up_local_manual() {
+    heading "Starting local-manual (full dev environment)"
+    local compose mvn_exe
+    compose=$(docker_compose_cmd)
+    mvn_exe=$(mvn_cmd)
+    local compose_file="$DEPLOY_DIR/local-manual/docker-compose.yaml"
+    local failed=false
+
+    # Phase 1: DB + 3 microservices in parallel
+    info "[1/4] PostgreSQL + pgAdmin indítása..."
+    $compose -f "$compose_file" up -d
+
+    info "[1/4] Microservice-ek indítása párhuzamosan..."
+    for svc in services/customer-service services/account-service services/transaction-service; do
+        cd "$SCRIPT_DIR"
+        $mvn_exe quarkus:dev -pl "$svc" &>/dev/null &
+        disown
+        info "  $svc elindítva (PID: $!)"
+    done
+
+    # Wait for DB
+    info "Várakozás a PostgreSQL-re..."
+    local retries=30
+    while ! docker exec bank_demo_db pg_isready -U demo &>/dev/null 2>&1; do
+        retries=$((retries - 1))
+        if [[ $retries -le 0 ]]; then
+            err "PostgreSQL nem indult el 30 másodpercen belül"
+            down_local_manual_quiet
+            exit 1
+        fi
+        sleep 1
+    done
+    ok "PostgreSQL kész: localhost:5432"
+    ok "pgAdmin: http://localhost:5050"
+
+    # Wait for 3 microservices
+    info "[2/4] Várakozás a microservice-ekre (timeout: ${PHASE_TIMEOUT}s)..."
+    for pair in "customer-service:8081" "account-service:8082" "transaction-service:8083"; do
+        local svc="${pair%%:*}" port="${pair##*:}"
+        if ! wait_for_health "$svc" "http://localhost:$port/q/health/ready" "$PHASE_TIMEOUT"; then
+            err "$svc nem indult el időben!"
+            failed=true
+        fi
+    done
+
+    if [[ "$failed" == "true" ]]; then
+        err "Nem minden microservice indult el. Leállítás..."
+        down_local_manual_quiet
+        exit 1
+    fi
+    ok "Minden microservice fut"
+
+    # Phase 2: Backend BFF
+    info "[3/4] Backend BFF indítása..."
+    cd "$SCRIPT_DIR"
+    $mvn_exe quarkus:dev -pl backend &>/dev/null &
+    disown
+
+    if ! wait_for_health "backend" "http://localhost:8080/q/health/ready" "$PHASE_TIMEOUT"; then
+        err "Backend nem indult el időben! Leállítás..."
+        down_local_manual_quiet
+        exit 1
+    fi
+    ok "Backend fut: http://localhost:8080/q/swagger-ui"
+
+    # Phase 3: Frontend
+    info "[4/4] Frontend indítása..."
+    cd "$SCRIPT_DIR/frontend"
+    npm start &>/dev/null &
+    disown
+
+    if ! wait_for_health "frontend" "http://localhost:4200" "$PHASE_TIMEOUT"; then
+        err "Frontend nem indult el időben! Leállítás..."
+        down_local_manual_quiet
+        exit 1
+    fi
+    ok "Frontend fut: http://localhost:4200"
+
+    # Final status
+    echo ""
+    cd "$SCRIPT_DIR"
+    status_local_manual
+}
+
+up_local_docker() {
+    heading "Starting local-docker (full stack)"
+    local compose
+    compose=$(docker_compose_cmd)
+    local compose_file="$DEPLOY_DIR/local-docker/docker-compose.yaml"
+    local env_file="$DEPLOY_DIR/local-docker/.env"
+
+    if [[ ! -f "$env_file" ]]; then
+        err ".env fájl hiányzik: $env_file"
+        info "Hozd létre: cp $DEPLOY_DIR/local-docker/.env.example $env_file"
+        exit 1
+    fi
+
+    if [[ ! -f "$DEPLOY_DIR/local-docker/secrets/db_password.txt" ]]; then
+        err "DB secret hiányzik: $DEPLOY_DIR/local-docker/secrets/db_password.txt"
+        info "Hozd létre: mkdir -p $DEPLOY_DIR/local-docker/secrets && echo 'MySecureDbPass123' > $DEPLOY_DIR/local-docker/secrets/db_password.txt"
+        exit 1
+    fi
+
+    build_maven_jars
+
+    info "Docker Compose build + start..."
+    $compose -f "$compose_file" --env-file "$env_file" up -d --build
+
+    ok "Teljes stack elindult!"
+    ok "Frontend: http://localhost:4200"
+    ok "Backend:  http://localhost:8080"
+    ok "Swagger:  http://localhost:8080/q/swagger-ui"
+}
+
+sandbox_apply_infra() {
+    local sandbox_dir="$DEPLOY_DIR/redhat-sandbox"
+
+    info "[1/4] Secrets és ConfigMap..."
+    oc apply -f "$sandbox_dir/secrets.yaml"
+    oc apply -f "$sandbox_dir/configmaps.yaml"
+    ok "Secrets és ConfigMap kész"
+
+    info "[2/4] PostgreSQL deploy..."
+    oc apply -f "$sandbox_dir/postgres.yaml"
+    info "Várakozás a Postgres pod-ra..."
+    oc rollout status statefulset/postgres -n "$OC_NAMESPACE" --timeout=120s 2>/dev/null || \
+        oc wait pod/postgres-0 -n "$OC_NAMESPACE" --for=condition=Ready --timeout=120s
+    ok "PostgreSQL fut"
+
+    info "[3/4] BuildConfig-ok és ImageStream-ek..."
+    oc apply -f "$sandbox_dir/buildconfigs.yaml"
+    ok "BuildConfig-ok kész"
+
+    info "[4/4] Tekton pipeline, tasks, triggers..."
+    if [[ -d "$sandbox_dir/tekton" ]]; then
+        oc apply -f "$sandbox_dir/tekton/"
+        ok "Tekton pipeline kész"
+    else
+        warn "Tekton mappa nem található, kihagyva"
+    fi
+
+    # Ensure EventListener pod is running
+    info "[*] EventListener ellenőrzés..."
+    local retries=15
+    while ! oc get deployment el-github-listener -n "$OC_NAMESPACE" &>/dev/null 2>&1; do
+        retries=$((retries - 1))
+        if [[ $retries -le 0 ]]; then
+            warn "EventListener deployment nem jött létre (Tekton operator nem elérhető?)"
+            return
+        fi
+        sleep 2
+    done
+    local replicas
+    replicas=$(oc get deployment el-github-listener -n "$OC_NAMESPACE" -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "0")
+    if [[ "$replicas" == "0" ]]; then
+        oc scale deployment el-github-listener -n "$OC_NAMESPACE" --replicas=1
+        info "  EventListener scale 0→1"
+    fi
+    oc rollout status deployment/el-github-listener -n "$OC_NAMESPACE" --timeout=60s 2>/dev/null || true
+    ok "EventListener fut (webhook aktív)"
+}
+
+sandbox_show_urls() {
+    echo ""
+    heading "Route URL-ek"
+    local frontend_url backend_url
+    frontend_url=$(oc get route bank-demo -n "$OC_NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo "N/A")
+    backend_url=$(oc get route backend-api -n "$OC_NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo "N/A")
+    ok "Frontend:   https://$frontend_url"
+    ok "Backend:    https://$backend_url"
+    ok "Swagger UI: https://$backend_url/q/swagger-ui"
+}
+
+up_redhat_sandbox() {
+    local infra_only="${1:-false}"
+    local sandbox_dir="$DEPLOY_DIR/redhat-sandbox"
+
+    heading "Deploying to Red Hat Developer Sandbox ($OC_NAMESPACE)"
+
+    # Phase 1: Infra sync (always)
+    sandbox_apply_infra
+
+    if [[ "$infra_only" == "true" ]]; then
+        ok "Infra szinkronizálás kész (--infra mód, build nem indult)"
+        sandbox_show_urls
+        return
+    fi
+
+    # Phase 2: Trigger PipelineRun (same path as webhook)
+    heading "Pipeline futtatása"
+    info "PipelineRun indítása (ugyanaz az út mint push-kor)..."
+
+    local git_revision
+    git_revision=$(git -C "$SCRIPT_DIR" rev-parse HEAD 2>/dev/null || echo "main")
+
+    local run_name
+    run_name=$(oc create -n "$OC_NAMESPACE" -f - -o jsonpath='{.metadata.name}' <<EOF
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: bank-demo-run-
+  namespace: $OC_NAMESPACE
+spec:
+  pipelineRef:
+    name: bank-demo-pipeline
+  serviceAccountName: pipeline
+  params:
+    - name: git-url
+      value: "https://github.com/tamicsko/quarkus-demo.git"
+    - name: git-revision
+      value: "$git_revision"
+  workspaces:
+    - name: shared-workspace
+      persistentVolumeClaim:
+        claimName: pipeline-workspace
+EOF
+    )
+
+    ok "PipelineRun elindult: $run_name"
+    info "Pipeline log követése (ez több percig tarthat)..."
+    echo ""
+
+    # Follow the pipeline run logs
+    # tkn CLI if available, otherwise poll with oc
+    if command -v tkn &>/dev/null; then
+        tkn pipelinerun logs "$run_name" -n "$OC_NAMESPACE" -f
+    else
+        # Poll pipeline status without tkn
+        info "(tkn CLI nincs telepítve — oc-vel követjük a státuszt)"
+        local timeout=600
+        local elapsed=0
+        while true; do
+            local status
+            status=$(oc get pipelinerun "$run_name" -n "$OC_NAMESPACE" -o jsonpath='{.status.conditions[0].status}' 2>/dev/null || echo "Unknown")
+            local reason
+            reason=$(oc get pipelinerun "$run_name" -n "$OC_NAMESPACE" -o jsonpath='{.status.conditions[0].reason}' 2>/dev/null || echo "Pending")
+
+            if [[ "$status" == "True" ]]; then
+                ok "Pipeline sikeresen lefutott!"
+                break
+            elif [[ "$status" == "False" ]]; then
+                err "Pipeline FAILED! Reason: $reason"
+                info "Részletes logok: oc get pipelinerun $run_name -n $OC_NAMESPACE -o yaml"
+                # Show task-level status
+                oc get pipelinerun "$run_name" -n "$OC_NAMESPACE" -o jsonpath='{range .status.taskRuns[*]}{.pipelineTaskName}: {.status.conditions[0].reason}{"\n"}{end}' 2>/dev/null || true
+                exit 1
+            fi
+
+            elapsed=$((elapsed + 10))
+            if [[ $elapsed -ge $timeout ]]; then
+                err "Pipeline timeout (${timeout}s)! Státusz: $reason"
+                exit 1
+            fi
+
+            printf "\r  [%3ds] %s..." "$elapsed" "$reason"
+            sleep 10
+        done
+    fi
+
+    # Final status
+    echo ""
+    info "Várakozás a pod-okra..."
+    for svc in "${ALL_SERVICES[@]}"; do
+        echo -n "  $svc: "
+        oc rollout status deployment/"$svc" -n "$OC_NAMESPACE" --timeout=180s 2>&1 | tail -1
+    done
+    ok "Minden deployment fut"
+
+    sandbox_show_urls
+}
+
+cmd_up() {
+    local target="${1:-}"
+    local flag="${2:-}"
+    if [[ -z "$target" ]]; then
+        err "Target megadása kötelező: ${TARGETS[*]}"
+        exit 1
+    fi
+    validate_target "$target"
+    check_prereqs "$target"
+    case "$target" in
+        local-manual)    up_local_manual ;;
+        local-docker)    up_local_docker ;;
+        redhat-sandbox)
+            if [[ "$flag" == "--infra" ]]; then
+                up_redhat_sandbox "true"
+            else
+                up_redhat_sandbox "false"
+            fi
+            ;;
+    esac
+}
+
+# ── Down functions ───────────────────────────────────────────────────────────
+
+down_local_manual_quiet() {
+    # Silent version for cleanup on failure
+    local compose
+    compose=$(docker_compose_cmd)
+    for port in 8081 8082 8083 8080; do kill_port "$port"; done
+    kill_port 4200
+    $compose -f "$DEPLOY_DIR/local-manual/docker-compose.yaml" down &>/dev/null || true
+}
+
+down_local_manual() {
+    heading "Stopping local-manual"
+
+    info "Quarkus service-ek leállítása..."
+    for pair in "customer-service:8081" "account-service:8082" "transaction-service:8083" "backend:8080"; do
+        local svc="${pair%%:*}" port="${pair##*:}"
+        kill_port "$port"
+        status_line "$svc (:$port)" "STOPPED" "$YELLOW"
+    done
+
+    info "Frontend leállítása..."
+    kill_port 4200
+    status_line "frontend (:4200)" "STOPPED" "$YELLOW"
+
+    info "Docker konténerek leállítása..."
+    local compose
+    compose=$(docker_compose_cmd)
+    $compose -f "$DEPLOY_DIR/local-manual/docker-compose.yaml" down
+
+    ok "Teljes local-manual környezet leállítva"
+}
+
+down_local_docker() {
+    heading "Stopping local-docker"
+    local compose
+    compose=$(docker_compose_cmd)
+    $compose -f "$DEPLOY_DIR/local-docker/docker-compose.yaml" down
+    ok "Teljes stack leállítva"
+}
+
+down_redhat_sandbox() {
+    heading "Removing from Red Hat Developer Sandbox ($OC_NAMESPACE)"
+
+    info "App deployment-ek törlése..."
+    oc delete deployment "${ALL_SERVICES[@]}" -n "$OC_NAMESPACE" --ignore-not-found 2>/dev/null || true
+
+    info "StatefulSet törlése..."
+    oc delete statefulset postgres -n "$OC_NAMESPACE" --ignore-not-found 2>/dev/null || true
+
+    info "App service-ek törlése..."
+    oc delete svc "${ALL_SERVICES[@]}" postgres -n "$OC_NAMESPACE" --ignore-not-found 2>/dev/null || true
+
+    info "Route-ok törlése..."
+    oc delete route backend-api bank-demo github-webhook -n "$OC_NAMESPACE" --ignore-not-found 2>/dev/null || true
+
+    info "BuildConfig-ok és ImageStream-ek törlése..."
+    oc delete buildconfig --all -n "$OC_NAMESPACE" --ignore-not-found 2>/dev/null || true
+    oc delete imagestream --all -n "$OC_NAMESPACE" --ignore-not-found 2>/dev/null || true
+
+    info "Tekton pipeline, tasks, triggers törlése..."
+    oc delete pipelinerun --all -n "$OC_NAMESPACE" --ignore-not-found 2>/dev/null || true
+    oc delete eventlistener --all -n "$OC_NAMESPACE" --ignore-not-found 2>/dev/null || true
+    oc delete triggertemplate --all -n "$OC_NAMESPACE" --ignore-not-found 2>/dev/null || true
+    oc delete triggerbinding --all -n "$OC_NAMESPACE" --ignore-not-found 2>/dev/null || true
+    oc delete pipeline.tekton.dev --all -n "$OC_NAMESPACE" --ignore-not-found 2>/dev/null || true
+    oc delete task.tekton.dev --all -n "$OC_NAMESPACE" --ignore-not-found 2>/dev/null || true
+
+    info "ConfigMap-ok és Secret-ek törlése..."
+    oc delete configmap service-config postgres-init -n "$OC_NAMESPACE" --ignore-not-found 2>/dev/null || true
+    oc delete secret db-credentials customer-svc-db account-svc-db tx-svc-db -n "$OC_NAMESPACE" --ignore-not-found 2>/dev/null || true
+
+    info "Megárva ReplicaSet-ek és podok takarítása..."
+    oc delete replicaset --all -n "$OC_NAMESPACE" --ignore-not-found 2>/dev/null || true
+    oc delete pods --all -n "$OC_NAMESPACE" --ignore-not-found 2>/dev/null || true
+
+    ok "Sandbox környezet törölve (PVC-k megmaradtak — használd a 'clean' parancsot a teljes törléshez)"
+}
+
+cmd_down() {
+    local target="${1:-}"
+    if [[ -z "$target" ]]; then
+        err "Target megadása kötelező: ${TARGETS[*]}"
+        exit 1
+    fi
+    validate_target "$target"
+    check_prereqs "$target"
+    case "$target" in
+        local-manual)    down_local_manual ;;
+        local-docker)    down_local_docker ;;
+        redhat-sandbox)  down_redhat_sandbox ;;
+    esac
+}
+
+# ── Logs functions ───────────────────────────────────────────────────────────
+
+logs_local_manual() {
+    local service="${1:-}"
+    local compose
+    compose=$(docker_compose_cmd)
+    if [[ -n "$service" ]]; then
+        $compose -f "$DEPLOY_DIR/local-manual/docker-compose.yaml" logs -f "$service"
+    else
+        $compose -f "$DEPLOY_DIR/local-manual/docker-compose.yaml" logs -f
+    fi
+}
+
+logs_local_docker() {
+    local service="${1:-}"
+    local compose
+    compose=$(docker_compose_cmd)
+    if [[ -n "$service" ]]; then
+        $compose -f "$DEPLOY_DIR/local-docker/docker-compose.yaml" logs -f "$service"
+    else
+        $compose -f "$DEPLOY_DIR/local-docker/docker-compose.yaml" logs -f
+    fi
+}
+
+logs_redhat_sandbox() {
+    local service="${1:-backend}"
+    info "Logok: $service (namespace: $OC_NAMESPACE)"
+    oc logs -f "deployment/$service" -n "$OC_NAMESPACE"
+}
+
+cmd_logs() {
+    local target="${1:-}"
+    local service="${2:-}"
+    if [[ -z "$target" ]]; then
+        err "Target megadása kötelező: ${TARGETS[*]}"
+        exit 1
+    fi
+    validate_target "$target"
+    check_prereqs "$target"
+    case "$target" in
+        local-manual)    logs_local_manual "$service" ;;
+        local-docker)    logs_local_docker "$service" ;;
+        redhat-sandbox)  logs_redhat_sandbox "$service" ;;
+    esac
+}
+
+# ── Clean functions ──────────────────────────────────────────────────────────
+
+clean_local_manual() {
+    heading "Cleaning local-manual (volumes törlése)"
+    local compose
+    compose=$(docker_compose_cmd)
+    $compose -f "$DEPLOY_DIR/local-manual/docker-compose.yaml" down -v
+    ok "Konténerek és volume-ok törölve"
+}
+
+clean_local_docker() {
+    heading "Cleaning local-docker (volumes + images törlése)"
+    local compose
+    compose=$(docker_compose_cmd)
+    $compose -f "$DEPLOY_DIR/local-docker/docker-compose.yaml" down -v --rmi local
+    ok "Konténerek, volume-ok és lokális image-ek törölve"
+}
+
+clean_redhat_sandbox() {
+    heading "Cleaning Red Hat Developer Sandbox ($OC_NAMESPACE)"
+    warn "Ez MINDEN adatot töröl (beleértve a PVC-ket)!"
+    read -rp "Biztosan folytatod? [y/N] " confirm
+    if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+        info "Megszakítva"
+        return
+    fi
+    down_redhat_sandbox
+    info "PVC-k törlése..."
+    oc delete pvc --all -n "$OC_NAMESPACE" --ignore-not-found 2>/dev/null || true
+    ok "Sandbox teljesen kitakarítva"
+}
+
+cmd_clean() {
+    local target="${1:-}"
+    if [[ -z "$target" ]]; then
+        err "Target megadása kötelező: ${TARGETS[*]}"
+        exit 1
+    fi
+    validate_target "$target"
+    check_prereqs "$target"
+    case "$target" in
+        local-manual)    clean_local_manual ;;
+        local-docker)    clean_local_docker ;;
+        redhat-sandbox)  clean_redhat_sandbox ;;
+    esac
+}
+
+# ── Seed functions ───────────────────────────────────────────────────────────
+
+seed_psql_cmd() {
+    local target="$1"
+    case "$target" in
+        local-manual)
+            echo "docker exec -i bank_demo_db psql -U demo -d quarkus_demo"
+            ;;
+        local-docker)
+            echo "docker exec -i bank_demo_db_prod psql -U bankadmin -d quarkus_demo"
+            ;;
+        redhat-sandbox)
+            echo "oc exec -i postgres-0 -n $OC_NAMESPACE -- psql -U bankadmin -d quarkus_demo"
+            ;;
+    esac
+}
+
+cmd_seed() {
+    local target="${1:-}"
+    local flag="${2:-}"
+    if [[ -z "$target" ]]; then
+        err "Target megadása kötelező: ${TARGETS[*]}"
+        exit 1
+    fi
+    validate_target "$target"
+
+    local psql_cmd
+    psql_cmd=$(seed_psql_cmd "$target")
+
+    if [[ "$flag" == "--clean" ]]; then
+        heading "Cleaning seed data ($target)"
+        local sql_file="$SCRIPT_DIR/tests/seed/seed-clean.sql"
+        if [[ ! -f "$sql_file" ]]; then
+            err "Seed clean file not found: $sql_file"
+            exit 1
+        fi
+        $psql_cmd < "$sql_file" 2>&1
+        ok "Seed data cleaned"
+    else
+        heading "Loading seed data ($target)"
+        local sql_file="$SCRIPT_DIR/tests/seed/seed-load.sql"
+        if [[ ! -f "$sql_file" ]]; then
+            err "Seed load file not found: $sql_file"
+            exit 1
+        fi
+        $psql_cmd < "$sql_file" 2>&1
+        ok "Seed data loaded (5 customers, 7 accounts, 3 transactions)"
+    fi
+}
+
+# ── Validation ───────────────────────────────────────────────────────────────
+
+validate_target() {
+    local target="$1"
+    for t in "${TARGETS[@]}"; do
+        [[ "$t" == "$target" ]] && return 0
+    done
+    err "Ismeretlen target: $target"
+    echo "  Lehetséges targetek: ${TARGETS[*]}"
+    exit 1
+}
+
+# ── Usage ────────────────────────────────────────────────────────────────────
+
+usage() {
+    cat <<'USAGE'
+bank-demo-ctl — Bank Demo deployment tool
+
+Usage: bank-demo-ctl <command> [target] [options]
+
+Commands:
+  status [target]           Show what's running (all targets if omitted)
+  up <target> [--infra]     Deploy/start a target environment
+  down <target>             Tear down a target environment
+  logs <target> [service]   Show logs (follow mode)
+  clean <target>            Remove volumes, images, and persistent data
+  seed <target> [--clean]   Load or remove seed data (tests/seed/seed-data.json)
+  build                     Build Java JARs (mvn package -DskipTests)
+
+Targets:
+  local-manual    PostgreSQL + pgAdmin only (services run via mvn quarkus:dev)
+  local-docker    Full stack in Docker (postgres + 4 services + frontend)
+  redhat-sandbox  Red Hat Developer Sandbox (OpenShift)
+
+Flags:
+  --infra   (redhat-sandbox only) Sync YAML-s to cluster without running
+            the pipeline. Use after modifying pipeline, deployment, or
+            config YAMLs. Creates resources if missing, updates if changed.
+
+Examples:
+  bank-demo-ctl status
+  bank-demo-ctl up local-manual
+  bank-demo-ctl up local-docker
+  bank-demo-ctl up redhat-sandbox              # infra sync + pipeline run
+  bank-demo-ctl up redhat-sandbox --infra      # only sync YAMLs, no build
+  bank-demo-ctl logs local-docker backend
+  bank-demo-ctl seed local-manual             # load seed data
+  bank-demo-ctl seed local-manual --clean     # remove seed data
+  bank-demo-ctl down redhat-sandbox
+  bank-demo-ctl clean local-manual
+
+Environment variables:
+  BANK_DEMO_NAMESPACE   OpenShift namespace (default: tamicsko-dev)
+USAGE
+}
+
+# ── Main dispatcher ──────────────────────────────────────────────────────────
+
+main() {
+    local cmd="${1:-help}"
+    local target="${2:-}"
+    local arg3="${3:-}"
+
+    case "$cmd" in
+        status)              cmd_status "$target" ;;
+        up)                  cmd_up "$target" "$arg3" ;;
+        down)                cmd_down "$target" ;;
+        logs)                cmd_logs "$target" "$arg3" ;;
+        clean)               cmd_clean "$target" ;;
+        seed)                cmd_seed "$target" "$arg3" ;;
+        build)               build_maven_jars ;;
+        help|-h|--help)      usage ;;
+        *)                   err "Ismeretlen parancs: $cmd"; usage; exit 1 ;;
+    esac
+}
+
+main "$@"

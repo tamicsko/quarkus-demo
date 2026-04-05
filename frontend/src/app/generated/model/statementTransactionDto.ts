@@ -15,13 +15,17 @@
 export interface StatementTransactionDto { 
     transactionRef?: string;
     /**
-     * Az adott számla szemszögéből bejövő vagy kimenő
+     * Típus: INCOMING/OUTGOING (átutalás), DEPOSIT (befizetés), WITHDRAWAL (kifizetés)
      */
     direction?: StatementTransactionDto.DirectionEnum;
     /**
-     * A másik fél számla azonosítója
+     * A másik fél számla azonosítója (null befizetés/kifizetés esetén)
      */
-    counterpartyAccountId?: number;
+    counterpartyAccountId?: number | null;
+    /**
+     * Befizetés/kifizetés oka
+     */
+    reason?: string | null;
     amount?: number;
     currency?: string;
     status?: StatementTransactionDto.StatusEnum;
@@ -30,7 +34,9 @@ export interface StatementTransactionDto {
 export namespace StatementTransactionDto {
     export const DirectionEnum = {
         Incoming: 'INCOMING',
-        Outgoing: 'OUTGOING'
+        Outgoing: 'OUTGOING',
+        Deposit: 'DEPOSIT',
+        Withdrawal: 'WITHDRAWAL'
     } as const;
     export type DirectionEnum = typeof DirectionEnum[keyof typeof DirectionEnum];
     export const StatusEnum = {

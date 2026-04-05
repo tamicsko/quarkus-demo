@@ -44,7 +44,7 @@ nb-configuration.xml
 .certs/
 
 # Docker secrets (soha ne commitold!)
-deployment/container/secrets/
+deployment/local-docker/secrets/
 
 # Node (Angular frontend)
 node_modules/
@@ -56,5 +56,5 @@ frontend/dist/
 # Claude Code
 .claude/
 
-# Docs (nem commitoljuk)
-docs/
+# Dev docs (local notes, not committed)
+docs/dev/

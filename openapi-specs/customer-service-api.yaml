@@ -135,16 +135,16 @@ components:
       required: true
       description: Ügyfél azonosító
       schema:
-        type: integer
-        format: int64
+        type: string
+        format: uuid
 
   schemas:
     CustomerDto:
       type: object
       properties:
         id:
-          type: integer
-          format: int64
+          type: string
+          format: uuid
         taxId:
           type: string
           description: Adóazonosító (unique)

@@ -1,0 +1,7 @@
+[
+  {"taxId":"8471926350","firstName":"Anna","lastName":"Kovács","email":"kovacs.anna@example.hu","phone":"+36301234567","accountNumber":"HU42117730161110180000000001","accountType":"CHECKING","currency":"HUF"},
+  {"taxId":"8295013746","firstName":"Péter","lastName":"Szabó","email":"szabo.peter@example.hu","phone":"+36209876543","accountNumber":"HU42117730161110180000000002","accountType":"CHECKING","currency":"HUF"},
+  {"taxId":"8350174926","firstName":"Eszter","lastName":"Tóth","email":"toth.eszter@example.hu","phone":"+36701112233","accountNumber":"HU42117730161110180000000003","accountType":"SAVINGS","currency":"EUR"},
+  {"taxId":"8163749205","firstName":"Gábor","lastName":"Nagy","email":"nagy.gabor@example.hu","phone":"+36304445566","accountNumber":"HU42117730161110180000000004","accountType":"CHECKING","currency":"USD"},
+  {"taxId":"8024917583","firstName":"Katalin","lastName":"Horváth","email":"horvath.katalin@example.hu","phone":"+36207778899","accountNumber":"HU42117730161110180000000005","accountType":"SAVINGS","currency":"HUF"}
+]

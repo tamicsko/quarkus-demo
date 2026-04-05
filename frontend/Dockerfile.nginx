@@ -1,0 +1,7 @@
+# Csak az nginx réteg — az Angular build már kész a pipeline-ban
+# A dist/frontend/browser/ könyvtárat a Tekton pipeline előző step-je készítette
+FROM registry.access.redhat.com/ubi9/nginx-124:1
+COPY dist/frontend/browser /opt/app-root/src
+COPY nginx.conf /opt/app-root/etc/nginx.default.d/app.conf
+EXPOSE 8080
+CMD ["nginx", "-g", "daemon off;"]

@@ -1,0 +1,152 @@
+# BuildConfig — Java service-ek (binary build + inline Dockerfile)
+# Az oc start-build --from-dir paranccsal töltjük fel a JAR-okat
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: customer-service
+  namespace: tamicsko-dev
+spec:
+  output:
+    to:
+      kind: ImageStreamTag
+      name: customer-service:latest
+  source:
+    type: Binary
+    dockerfile: |
+      FROM registry.access.redhat.com/ubi8/openjdk-21:1.20
+      ENV LANGUAGE="en_US:en"
+      COPY --chown=185 lib/ /deployments/lib/
+      COPY --chown=185 *.jar /deployments/
+      COPY --chown=185 app/ /deployments/app/
+      COPY --chown=185 quarkus/ /deployments/quarkus/
+      EXPOSE 8080
+      ENV JAVA_OPTS_APPEND="-Dquarkus.http.host=0.0.0.0 -Djava.util.logging.manager=org.jboss.logmanager.LogManager"
+      ENV JAVA_APP_JAR="/deployments/quarkus-run.jar"
+  strategy:
+    type: Docker
+    dockerStrategy: {}
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: customer-service
+  namespace: tamicsko-dev
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: account-service
+  namespace: tamicsko-dev
+spec:
+  output:
+    to:
+      kind: ImageStreamTag
+      name: account-service:latest
+  source:
+    type: Binary
+    dockerfile: |
+      FROM registry.access.redhat.com/ubi8/openjdk-21:1.20
+      ENV LANGUAGE="en_US:en"
+      COPY --chown=185 lib/ /deployments/lib/
+      COPY --chown=185 *.jar /deployments/
+      COPY --chown=185 app/ /deployments/app/
+      COPY --chown=185 quarkus/ /deployments/quarkus/
+      EXPOSE 8080
+      ENV JAVA_OPTS_APPEND="-Dquarkus.http.host=0.0.0.0 -Djava.util.logging.manager=org.jboss.logmanager.LogManager"
+      ENV JAVA_APP_JAR="/deployments/quarkus-run.jar"
+  strategy:
+    type: Docker
+    dockerStrategy: {}
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: account-service
+  namespace: tamicsko-dev
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: transaction-service
+  namespace: tamicsko-dev
+spec:
+  output:
+    to:
+      kind: ImageStreamTag
+      name: transaction-service:latest
+  source:
+    type: Binary
+    dockerfile: |
+      FROM registry.access.redhat.com/ubi8/openjdk-21:1.20
+      ENV LANGUAGE="en_US:en"
+      COPY --chown=185 lib/ /deployments/lib/
+      COPY --chown=185 *.jar /deployments/
+      COPY --chown=185 app/ /deployments/app/
+      COPY --chown=185 quarkus/ /deployments/quarkus/
+      EXPOSE 8080
+      ENV JAVA_OPTS_APPEND="-Dquarkus.http.host=0.0.0.0 -Djava.util.logging.manager=org.jboss.logmanager.LogManager"
+      ENV JAVA_APP_JAR="/deployments/quarkus-run.jar"
+  strategy:
+    type: Docker
+    dockerStrategy: {}
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: transaction-service
+  namespace: tamicsko-dev
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: backend
+  namespace: tamicsko-dev
+spec:
+  output:
+    to:
+      kind: ImageStreamTag
+      name: backend:latest
+  source:
+    type: Binary
+    dockerfile: |
+      FROM registry.access.redhat.com/ubi8/openjdk-21:1.20
+      ENV LANGUAGE="en_US:en"
+      COPY --chown=185 lib/ /deployments/lib/
+      COPY --chown=185 *.jar /deployments/
+      COPY --chown=185 app/ /deployments/app/
+      COPY --chown=185 quarkus/ /deployments/quarkus/
+      EXPOSE 8080
+      ENV JAVA_OPTS_APPEND="-Dquarkus.http.host=0.0.0.0 -Djava.util.logging.manager=org.jboss.logmanager.LogManager"
+      ENV JAVA_APP_JAR="/deployments/quarkus-run.jar"
+  strategy:
+    type: Docker
+    dockerStrategy: {}
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: backend
+  namespace: tamicsko-dev
+---
+# Frontend — a saját Dockerfile-ját használja (multi-stage Angular build + nginx)
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: frontend
+  namespace: tamicsko-dev
+spec:
+  output:
+    to:
+      kind: ImageStreamTag
+      name: frontend:latest
+  source:
+    type: Binary
+  strategy:
+    type: Docker
+    dockerStrategy: {}
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: frontend
+  namespace: tamicsko-dev

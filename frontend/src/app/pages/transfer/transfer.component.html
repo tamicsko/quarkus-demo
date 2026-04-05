@@ -1,25 +1,33 @@
-<h1>Transfer</h1>
+<h1>{{ 'transfer.title' | translate }}</h1>
 
 <mat-card class="transfer-card">
   <mat-card-header>
-    <mat-card-title>Initiate Transfer</mat-card-title>
+    <mat-card-title>{{ 'transfer.initiate' | translate }}</mat-card-title>
   </mat-card-header>
   <mat-card-content>
     <div class="form-grid">
       <mat-form-field>
-        <mat-label>From Account ID</mat-label>
-        <input matInput type="number" [(ngModel)]="request.fromAccountId" required>
+        <mat-label>{{ 'transfer.fromAccount' | translate }}</mat-label>
+        <mat-select [(ngModel)]="request.fromAccountId" (ngModelChange)="onFromChange()" required>
+          @for (a of accounts(); track a.accountId) {
+            <mat-option [value]="a.accountId">{{ a.label }}</mat-option>
+          }
+        </mat-select>
       </mat-form-field>
       <mat-form-field>
-        <mat-label>To Account ID</mat-label>
-        <input matInput type="number" [(ngModel)]="request.toAccountId" required>
+        <mat-label>{{ 'transfer.toAccount' | translate }}</mat-label>
+        <mat-select [(ngModel)]="request.toAccountId" required>
+          @for (a of accounts(); track a.accountId) {
+            <mat-option [value]="a.accountId" [disabled]="a.accountId === request.fromAccountId">{{ a.label }}</mat-option>
+          }
+        </mat-select>
       </mat-form-field>
       <mat-form-field>
-        <mat-label>Amount</mat-label>
+        <mat-label>{{ 'transfer.amount' | translate }}</mat-label>
         <input matInput type="number" [(ngModel)]="request.amount" required>
       </mat-form-field>
       <mat-form-field>
-        <mat-label>Currency</mat-label>
+        <mat-label>{{ 'transfer.currency' | translate }}</mat-label>
         <mat-select [(ngModel)]="request.currency">
           <mat-option value="HUF">HUF</mat-option>
           <mat-option value="EUR">EUR</mat-option>
@@ -29,11 +37,11 @@
     </div>
   </mat-card-content>
   <mat-card-actions>
-    <button mat-raised-button color="primary" (click)="submit()" [disabled]="loading()">
+    <button mat-raised-button color="primary" (click)="submit()" [disabled]="loading() || !request.fromAccountId || !request.toAccountId || !request.amount">
       @if (loading()) {
         <mat-spinner diameter="20"></mat-spinner>
       } @else {
-        <ng-container><mat-icon>send</mat-icon> Send Transfer</ng-container>
+        <ng-container><mat-icon>send</mat-icon> {{ 'transfer.send' | translate }}</ng-container>
       }
     </button>
   </mat-card-actions>
@@ -56,7 +64,7 @@
   <mat-card class="result-card result-failed">
     <mat-card-header>
       <mat-icon mat-card-avatar>error</mat-icon>
-      <mat-card-title>Error</mat-card-title>
+      <mat-card-title>{{ 'transfer.error' | translate }}</mat-card-title>
     </mat-card-header>
     <mat-card-content>
       <p>{{ err }}</p>

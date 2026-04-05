@@ -1,50 +1,50 @@
-<h1>Clients</h1>
+<h1>{{ 'clients.title' | translate }}</h1>
 
 <button mat-raised-button color="primary" (click)="showForm.set(!showForm())">
   <mat-icon>{{ showForm() ? 'close' : 'person_add' }}</mat-icon>
-  {{ showForm() ? 'Cancel' : 'New Client' }}
+  {{ showForm() ? ('clients.cancel' | translate) : ('clients.newClient' | translate) }}
 </button>
 
 @if (showForm()) {
   <mat-card class="form-card">
     <mat-card-header>
-      <mat-card-title>Register New Client</mat-card-title>
+      <mat-card-title>{{ 'clients.registerTitle' | translate }}</mat-card-title>
     </mat-card-header>
     <mat-card-content>
       <div class="form-grid">
         <mat-form-field>
-          <mat-label>Tax ID</mat-label>
+          <mat-label>{{ 'clients.taxId' | translate }}</mat-label>
           <input matInput [(ngModel)]="newClient.taxId" required>
         </mat-form-field>
         <mat-form-field>
-          <mat-label>First Name</mat-label>
+          <mat-label>{{ 'clients.firstName' | translate }}</mat-label>
           <input matInput [(ngModel)]="newClient.firstName" required>
         </mat-form-field>
         <mat-form-field>
-          <mat-label>Last Name</mat-label>
+          <mat-label>{{ 'clients.lastName' | translate }}</mat-label>
           <input matInput [(ngModel)]="newClient.lastName" required>
         </mat-form-field>
         <mat-form-field>
-          <mat-label>Email</mat-label>
+          <mat-label>{{ 'clients.email' | translate }}</mat-label>
           <input matInput type="email" [(ngModel)]="newClient.email" required>
         </mat-form-field>
         <mat-form-field>
-          <mat-label>Phone</mat-label>
+          <mat-label>{{ 'clients.phone' | translate }}</mat-label>
           <input matInput [(ngModel)]="newClient.phone">
         </mat-form-field>
         <mat-form-field>
-          <mat-label>Account Number (IBAN)</mat-label>
+          <mat-label>{{ 'clients.accountNumber' | translate }}</mat-label>
           <input matInput [(ngModel)]="newClient.accountNumber" required>
         </mat-form-field>
         <mat-form-field>
-          <mat-label>Account Type</mat-label>
+          <mat-label>{{ 'clients.accountType' | translate }}</mat-label>
           <mat-select [(ngModel)]="newClient.accountType">
-            <mat-option value="CHECKING">Checking</mat-option>
-            <mat-option value="SAVINGS">Savings</mat-option>
+            <mat-option value="CHECKING">{{ 'account.checking' | translate }}</mat-option>
+            <mat-option value="SAVINGS">{{ 'account.savings' | translate }}</mat-option>
           </mat-select>
         </mat-form-field>
         <mat-form-field>
-          <mat-label>Currency</mat-label>
+          <mat-label>{{ 'clients.currency' | translate }}</mat-label>
           <mat-select [(ngModel)]="newClient.currency">
             <mat-option value="HUF">HUF</mat-option>
             <mat-option value="EUR">EUR</mat-option>
@@ -54,7 +54,7 @@
       </div>
     </mat-card-content>
     <mat-card-actions>
-      <button mat-raised-button color="primary" (click)="register()">Register</button>
+      <button mat-raised-button color="primary" (click)="register()">{{ 'clients.register' | translate }}</button>
     </mat-card-actions>
   </mat-card>
 }
@@ -66,36 +66,36 @@
   </ng-container>
 
   <ng-container matColumnDef="name">
-    <th mat-header-cell *matHeaderCellDef>Name</th>
+    <th mat-header-cell *matHeaderCellDef>{{ 'clients.name' | translate }}</th>
     <td mat-cell *matCellDef="let c">{{ c.firstName }} {{ c.lastName }}</td>
   </ng-container>
 
   <ng-container matColumnDef="taxId">
-    <th mat-header-cell *matHeaderCellDef>Tax ID</th>
+    <th mat-header-cell *matHeaderCellDef>{{ 'clients.taxId' | translate }}</th>
     <td mat-cell *matCellDef="let c">{{ c.taxId }}</td>
   </ng-container>
 
   <ng-container matColumnDef="email">
-    <th mat-header-cell *matHeaderCellDef>Email</th>
+    <th mat-header-cell *matHeaderCellDef>{{ 'clients.email' | translate }}</th>
     <td mat-cell *matCellDef="let c">{{ c.email }}</td>
   </ng-container>
 
   <ng-container matColumnDef="status">
-    <th mat-header-cell *matHeaderCellDef>Status</th>
+    <th mat-header-cell *matHeaderCellDef>{{ 'clients.status' | translate }}</th>
     <td mat-cell *matCellDef="let c">
       <span class="status-chip" [class]="'status-' + c.status?.toLowerCase()">{{ c.status }}</span>
     </td>
   </ng-container>
 
   <ng-container matColumnDef="accounts">
-    <th mat-header-cell *matHeaderCellDef>Accounts</th>
+    <th mat-header-cell *matHeaderCellDef>{{ 'clients.accounts' | translate }}</th>
     <td mat-cell *matCellDef="let c">{{ c.accountCount }}</td>
   </ng-container>
 
   <ng-container matColumnDef="actions">
     <th mat-header-cell *matHeaderCellDef></th>
     <td mat-cell *matCellDef="let c">
-      <a mat-icon-button [routerLink]="['/clients', c.id]" matTooltip="Details">
+      <a mat-icon-button [routerLink]="['/clients', c.id]" [matTooltip]="'clients.details' | translate">
         <mat-icon>visibility</mat-icon>
       </a>
     </td>

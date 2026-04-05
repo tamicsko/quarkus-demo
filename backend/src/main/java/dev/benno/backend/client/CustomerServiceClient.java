@@ -21,13 +21,13 @@ public interface CustomerServiceClient {
 
     @GET
     @Path("/{id}")
-    CustomerDto getCustomer(@PathParam("id") Long id);
+    CustomerDto getCustomer(@PathParam("id") String id);
 
     @POST
     CustomerDto createCustomer(CreateCustomerRequest request);
 
     class CustomerDto {
-        public Long id;
+        public String id;
         public String taxId;
         public String firstName;
         public String lastName;

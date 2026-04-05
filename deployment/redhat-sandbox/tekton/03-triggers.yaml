@@ -1,0 +1,85 @@
+# =============================================================================
+# Tekton Triggers — GitHub Webhook → PipelineRun
+# =============================================================================
+
+# TriggerBinding — GitHub push webhook payload-ból kinyerjük a paramétereket
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerBinding
+metadata:
+  name: github-push-binding
+  namespace: tamicsko-dev
+spec:
+  params:
+    - name: git-revision
+      value: $(body.after)
+    - name: git-url
+      value: $(body.repository.clone_url)
+
+---
+# TriggerTemplate — PipelineRun létrehozása a paraméterekkel
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerTemplate
+metadata:
+  name: github-push-template
+  namespace: tamicsko-dev
+spec:
+  params:
+    - name: git-revision
+    - name: git-url
+  resourcetemplates:
+    - apiVersion: tekton.dev/v1
+      kind: PipelineRun
+      metadata:
+        generateName: bank-demo-run-
+      spec:
+        pipelineRef:
+          name: bank-demo-pipeline
+        serviceAccountName: pipeline
+        params:
+          - name: git-url
+            value: $(tt.params.git-url)
+          - name: git-revision
+            value: $(tt.params.git-revision)
+        workspaces:
+          - name: shared-workspace
+            persistentVolumeClaim:
+              claimName: pipeline-workspace
+
+---
+# EventListener — fogadja a GitHub webhook-ot
+apiVersion: triggers.tekton.dev/v1beta1
+kind: EventListener
+metadata:
+  name: github-listener
+  namespace: tamicsko-dev
+spec:
+  serviceAccountName: pipeline
+  triggers:
+    - name: github-push
+      bindings:
+        - ref: github-push-binding
+      template:
+        ref: github-push-template
+      interceptors:
+        - ref:
+            name: "github"
+          params:
+            - name: "eventTypes"
+              value: ["push"]
+
+---
+# Route — publikus URL a webhook számára
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: github-webhook
+  namespace: tamicsko-dev
+spec:
+  to:
+    kind: Service
+    name: el-github-listener
+  port:
+    targetPort: http-listener
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

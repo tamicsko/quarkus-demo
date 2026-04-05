@@ -1,4 +1,4 @@
-<h1>Dashboard</h1>
+<h1>{{ 'dashboard.title' | translate }}</h1>
 
 @if (loading()) {
   <div class="loading">
@@ -10,10 +10,10 @@
       <mat-card-header>
         <mat-icon mat-card-avatar>people</mat-icon>
         <mat-card-title>{{ clients().length }}</mat-card-title>
-        <mat-card-subtitle>Clients</mat-card-subtitle>
+        <mat-card-subtitle>{{ 'dashboard.clients' | translate }}</mat-card-subtitle>
       </mat-card-header>
       <mat-card-actions>
-        <a mat-button routerLink="/clients">View all</a>
+        <a mat-button routerLink="/clients">{{ 'dashboard.viewAll' | translate }}</a>
       </mat-card-actions>
     </mat-card>
 
@@ -21,18 +21,18 @@
       <mat-card-header>
         <mat-icon mat-card-avatar>account_balance</mat-icon>
         <mat-card-title>{{ totalAccounts() }}</mat-card-title>
-        <mat-card-subtitle>Accounts</mat-card-subtitle>
+        <mat-card-subtitle>{{ 'dashboard.accounts' | translate }}</mat-card-subtitle>
       </mat-card-header>
     </mat-card>
 
     <mat-card>
       <mat-card-header>
         <mat-icon mat-card-avatar>swap_horiz</mat-icon>
-        <mat-card-title>Transfer</mat-card-title>
-        <mat-card-subtitle>Send money</mat-card-subtitle>
+        <mat-card-title>{{ 'dashboard.transfer' | translate }}</mat-card-title>
+        <mat-card-subtitle>{{ 'dashboard.sendMoney' | translate }}</mat-card-subtitle>
       </mat-card-header>
       <mat-card-actions>
-        <a mat-button routerLink="/transfer">New transfer</a>
+        <a mat-button routerLink="/transfer">{{ 'dashboard.newTransfer' | translate }}</a>
       </mat-card-actions>
     </mat-card>
   </div>

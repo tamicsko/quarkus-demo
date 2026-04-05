@@ -1,0 +1,41 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: maven-java21
+  namespace: tamicsko-dev
+  labels:
+    app.kubernetes.io/part-of: bank-demo
+spec:
+  description: Maven build with Java 21 for OpenShift environments without unzip/gzip
+  params:
+    - name: GOALS
+      type: array
+      default:
+        - package
+    - name: SUBDIRECTORY
+      type: string
+      default: ""
+  workspaces:
+    - name: source
+  steps:
+    - name: maven-build
+      image: registry.access.redhat.com/ubi9/openjdk-21:1.20
+      workingDir: $(workspaces.source.path)/$(params.SUBDIRECTORY)
+      args: ["$(params.GOALS[*])"]
+      env:
+        - name: MAVEN_USER_HOME
+          value: "$(workspaces.source.path)/.maven"
+      script: |
+        #!/bin/bash
+        set -e
+        echo "=== Java $(java -version 2>&1 | head -1) ==="
+        echo "Working dir: $(pwd)"
+        echo ""
+        mkdir -p /tmp/bin
+        echo "IyEvYmluL2Jhc2gKWklQRklMRT0iIgpERVNURElSPSIiCndoaWxlIFsgJCMgLWd0IDAgXTsgZG8KICBjYXNlICIkMSIgaW4KICAgIC1xKSBzaGlmdCA7OwogICAgLWQpIERFU1RESVI9IiQyIjsgc2hpZnQgMiA7OwogICAgKikgIFpJUEZJTEU9IiQxIjsgc2hpZnQgOzsKICBlc2FjCmRvbmUKaWYgWyAteiAiJFpJUEZJTEUiIF07IHRoZW4gZWNobyAidW56aXAgZXJyb3IiOyBleGl0IDE7IGZpCkFCU1BBVEg9IiQoY2QgIiQoZGlybmFtZSAiJFpJUEZJTEUiKSIgJiYgcHdkKS8kKGJhc2VuYW1lICIkWklQRklMRSIpIgppZiBbIC1uICIkREVTVERJUiIgXTsgdGhlbgogIG1rZGlyIC1wICIkREVTVERJUiIKICBjZCAiJERFU1RESVIiCmZpCmphciB4ZiAiJEFCU1BBVEgiCmNobW9kIC1SICt4ICovYmluLyAyPi9kZXYvbnVsbCB8fCB0cnVlCmZpbmQgLiAtbmFtZSAiKi5zaCIgLWV4ZWMgY2htb2QgK3gge30gKyAyPi9kZXYvbnVsbCB8fCB0cnVlCg==" | base64 -d > /tmp/bin/unzip
+        chmod +x /tmp/bin/unzip
+        export PATH="/tmp/bin:$PATH"
+        # Fix permissions on cached maven (jar xf doesn't preserve execute bits)
+        find "${MAVEN_USER_HOME}" -path "*/bin/*" -type f -exec chmod +x {} + 2>/dev/null || true
+        echo "=== Running: bash mvnw $@ ==="
+        bash mvnw "$@"

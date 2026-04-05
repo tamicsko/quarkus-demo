@@ -1,0 +1,115 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: bank_demo_db_prod
+    secrets:
+      - db_password
+    environment:
+      POSTGRES_DB: quarkus_demo
+      POSTGRES_USER: bankadmin
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    volumes:
+      - ../local-manual/init-schemas.sql:/docker-entrypoint-initdb.d/init.sql
+      - pgdata_prod:/var/lib/postgresql/data
+    networks:
+      - bank-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bankadmin -d quarkus_demo"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  customer-service:
+    build:
+      context: ../../services/customer-service
+      dockerfile: src/main/docker/Dockerfile.jvm
+    container_name: bank_customer_svc
+    environment:
+      QUARKUS_PROFILE: container
+      DB_HOST: postgres
+      DB_NAME: quarkus_demo
+      DB_USER: bankadmin
+      DB_PASSWORD: ${CUSTOMER_SVC_DB_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - bank-net
+
+  account-service:
+    build:
+      context: ../../services/account-service
+      dockerfile: src/main/docker/Dockerfile.jvm
+    container_name: bank_account_svc
+    environment:
+      QUARKUS_PROFILE: container
+      DB_HOST: postgres
+      DB_NAME: quarkus_demo
+      DB_USER: bankadmin
+      DB_PASSWORD: ${ACCOUNT_SVC_DB_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - bank-net
+
+  transaction-service:
+    build:
+      context: ../../services/transaction-service
+      dockerfile: src/main/docker/Dockerfile.jvm
+    container_name: bank_tx_svc
+    environment:
+      QUARKUS_PROFILE: container
+      DB_HOST: postgres
+      DB_NAME: quarkus_demo
+      DB_USER: bankadmin
+      DB_PASSWORD: ${TX_SVC_DB_PASSWORD}
+      ACCOUNT_SERVICE_URL: http://account-service:8082
+    depends_on:
+      postgres:
+        condition: service_healthy
+      account-service:
+        condition: service_started
+    networks:
+      - bank-net
+
+  backend:
+    build:
+      context: ../../backend
+      dockerfile: src/main/docker/Dockerfile.jvm
+    container_name: bank_backend
+    ports:
+      - "8080:8080"
+    environment:
+      QUARKUS_PROFILE: container
+      CUSTOMER_SERVICE_URL: http://customer-service:8081
+      ACCOUNT_SERVICE_URL: http://account-service:8082
+      TRANSACTION_SERVICE_URL: http://transaction-service:8083
+    depends_on:
+      - customer-service
+      - account-service
+      - transaction-service
+    networks:
+      - bank-net
+
+  frontend:
+    build:
+      context: ../../frontend
+    container_name: bank_frontend
+    ports:
+      - "4200:8080"
+    depends_on:
+      - backend
+    networks:
+      - bank-net
+
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt
+
+volumes:
+  pgdata_prod:
+
+networks:
+  bank-net:
+    driver: bridge

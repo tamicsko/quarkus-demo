@@ -18,7 +18,7 @@ import java.util.UUID;
 public interface TransactionServiceClient {
 
     @GET
-    List<TransactionDto> listTransactions(@QueryParam("accountId") Long accountId);
+    List<TransactionDto> listTransactions(@QueryParam("accountId") String accountId);
 
     @POST
     TransactionDto createTransaction(CreateTransactionRequest request);
@@ -28,10 +28,10 @@ public interface TransactionServiceClient {
     TransactionStatusDto getTransactionStatusByRef(@PathParam("ref") UUID ref);
 
     class TransactionDto {
-        public Long id;
+        public String id;
         public String transactionRef;
-        public Long fromAccountId;
-        public Long toAccountId;
+        public String fromAccountId;
+        public String toAccountId;
         public Double amount;
         public String currency;
         public String status;
@@ -41,14 +41,14 @@ public interface TransactionServiceClient {
     }
 
     class CreateTransactionRequest {
-        public Long fromAccountId;
-        public Long toAccountId;
+        public String fromAccountId;
+        public String toAccountId;
         public Double amount;
         public String currency;
 
         public CreateTransactionRequest() {}
 
-        public CreateTransactionRequest(Long fromAccountId, Long toAccountId,
+        public CreateTransactionRequest(String fromAccountId, String toAccountId,
                                         Double amount, String currency) {
             this.fromAccountId = fromAccountId;
             this.toAccountId = toAccountId;

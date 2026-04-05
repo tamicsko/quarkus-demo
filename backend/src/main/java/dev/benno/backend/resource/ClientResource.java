@@ -15,6 +15,7 @@ import org.jboss.logging.Logger;
 
 import java.util.Date;
 import java.util.List;
+import java.util.UUID;
 
 @ApplicationScoped
 public class ClientResource implements ClientApi {
@@ -55,12 +56,12 @@ public class ClientResource implements ClientApi {
     // =========================================================================
 
     @Override
-    public Response getClientDetail(Long id) {
-        LOG.infof("Getting client detail: customerId=%d", id);
+    public Response getClientDetail(UUID id) {
+        LOG.infof("Getting client detail: customerId=%s", id);
 
         CustomerDto customer;
         try {
-            customer = customerService.getCustomer(id);
+            customer = customerService.getCustomer(id.toString());
         } catch (WebApplicationException e) {
             if (e.getResponse().getStatus() == 404) {
                 return notFound("Client not found: id=" + id);
@@ -68,9 +69,9 @@ public class ClientResource implements ClientApi {
             throw e;
         }
 
-        List<AccountDto> accounts = accountService.listAccounts(id);
+        List<AccountDto> accounts = accountService.listAccounts(id.toString());
 
-        LOG.infof("Client detail: customerId=%d, accounts=%d", id, accounts.size());
+        LOG.infof("Client detail: customerId=%s, accounts=%d", id, accounts.size());
         return Response.ok(toDetailDto(customer, accounts)).build();
     }
 
@@ -79,9 +80,9 @@ public class ClientResource implements ClientApi {
     // =========================================================================
 
     @Override
-    public Response getClientAccounts(Long id) {
-        LOG.debugf("Getting accounts for customerId=%d", id);
-        List<AccountDto> accounts = accountService.listAccounts(id);
+    public Response getClientAccounts(UUID id) {
+        LOG.debugf("Getting accounts for customerId=%s", id);
+        List<AccountDto> accounts = accountService.listAccounts(id.toString());
         List<AccountInfoDto> result = accounts.stream().map(this::toAccountInfoDto).toList();
         return Response.ok(result).build();
     }
@@ -116,7 +117,7 @@ public class ClientResource implements ClientApi {
             throw e;
         }
 
-        LOG.infof("Customer created: id=%d. Opening account...", customer.id);
+        LOG.infof("Customer created: id=%s. Opening account...", customer.id);
 
         // 2. Számla nyitása
         AccountDto account;
@@ -129,7 +130,7 @@ public class ClientResource implements ClientApi {
                             request.getCurrency().value(),
                             0.0));
         } catch (WebApplicationException e) {
-            LOG.errorf("Account creation failed for new customer id=%d: %s",
+            LOG.errorf("Account creation failed for new customer id=%s: %s",
                     customer.id, e.getMessage());
             // Megjegyzés: itt lehetne kompenzáció (ügyfél törlése), de a terv szerint
             // csak logolunk + hibát jelzünk
@@ -139,7 +140,7 @@ public class ClientResource implements ClientApi {
                     .build();
         }
 
-        LOG.infof("Client registered: customerId=%d, accountId=%d", customer.id, account.id);
+        LOG.infof("Client registered: customerId=%s, accountId=%s", customer.id, account.id);
         return Response.status(Response.Status.CREATED)
                 .entity(toDetailDto(customer, List.of(account)))
                 .build();
@@ -151,13 +152,13 @@ public class ClientResource implements ClientApi {
     // =========================================================================
 
     @Override
-    public Response openAccount(Long id, OpenAccountRequest request) {
-        LOG.infof("Opening account for customerId=%d", id);
+    public Response openAccount(UUID id, OpenAccountRequest request) {
+        LOG.infof("Opening account for customerId=%s", id);
 
         // 1. Ügyfél ellenőrzése
         CustomerDto customer;
         try {
-            customer = customerService.getCustomer(id);
+            customer = customerService.getCustomer(id.toString());
         } catch (WebApplicationException e) {
             if (e.getResponse().getStatus() == 404) {
                 return notFound("Client not found: id=" + id);
@@ -166,7 +167,7 @@ public class ClientResource implements ClientApi {
         }
 
         if (!"ACTIVE".equals(customer.status)) {
-            LOG.warnf("Cannot open account: customer id=%d is %s", id, customer.status);
+            LOG.warnf("Cannot open account: customer id=%s is %s", id, customer.status);
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity(errorResponse("Customer is not active: status=" + customer.status))
                     .build();
@@ -176,12 +177,12 @@ public class ClientResource implements ClientApi {
         AccountDto account = accountService.createAccount(
                 new AccountServiceClient.CreateAccountRequest(
                         request.getAccountNumber(),
-                        id,
+                        id.toString(),
                         request.getAccountType().value(),
                         request.getCurrency().value(),
                         request.getInitialBalance() != null ? request.getInitialBalance() : 0.0));
 
-        LOG.infof("Account opened: accountId=%d for customerId=%d", account.id, id);
+        LOG.infof("Account opened: accountId=%s for customerId=%s", account.id, id);
         return Response.status(Response.Status.CREATED)
                 .entity(toAccountInfoDto(account))
                 .build();
@@ -193,7 +194,7 @@ public class ClientResource implements ClientApi {
 
     private ClientSummaryDto toSummaryDto(CustomerDto c, int accountCount) {
         ClientSummaryDto dto = new ClientSummaryDto();
-        dto.setId(c.id);
+        dto.setId(UUID.fromString(c.id));
         dto.setTaxId(c.taxId);
         dto.setFirstName(c.firstName);
         dto.setLastName(c.lastName);
@@ -205,7 +206,7 @@ public class ClientResource implements ClientApi {
 
     private ClientDetailDto toDetailDto(CustomerDto c, List<AccountDto> accounts) {
         ClientDetailDto dto = new ClientDetailDto();
-        dto.setId(c.id);
+        dto.setId(UUID.fromString(c.id));
         dto.setTaxId(c.taxId);
         dto.setFirstName(c.firstName);
         dto.setLastName(c.lastName);
@@ -219,7 +220,7 @@ public class ClientResource implements ClientApi {
 
     private AccountInfoDto toAccountInfoDto(AccountDto a) {
         AccountInfoDto dto = new AccountInfoDto();
-        dto.setId(a.id);
+        dto.setId(UUID.fromString(a.id));
         dto.setAccountNumber(a.accountNumber);
         dto.setAccountType(a.accountType != null ? AccountInfoDto.AccountTypeEnum.fromValue(a.accountType) : null);
         dto.setBalance(a.balance);

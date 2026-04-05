@@ -1,0 +1,125 @@
+{
+  "customers": [
+    {
+      "id": "a1b2c3d4-1111-4000-8000-000000000001",
+      "taxId": "8471926350",
+      "firstName": "Anna",
+      "lastName": "Kovács",
+      "email": "kovacs.anna@example.hu",
+      "phone": "+36301234567"
+    },
+    {
+      "id": "a1b2c3d4-1111-4000-8000-000000000002",
+      "taxId": "3928174650",
+      "firstName": "Péter",
+      "lastName": "Szabó",
+      "email": "szabo.peter@example.hu",
+      "phone": "+36209876543"
+    },
+    {
+      "id": "a1b2c3d4-1111-4000-8000-000000000003",
+      "taxId": "6150483927",
+      "firstName": "Eszter",
+      "lastName": "Tóth",
+      "email": "toth.eszter@example.hu",
+      "phone": "+36701112233"
+    },
+    {
+      "id": "a1b2c3d4-1111-4000-8000-000000000004",
+      "taxId": "2749381056",
+      "firstName": "Gábor",
+      "lastName": "Nagy",
+      "email": "nagy.gabor@example.hu",
+      "phone": "+36304445566"
+    },
+    {
+      "id": "a1b2c3d4-1111-4000-8000-000000000005",
+      "taxId": "5083617294",
+      "firstName": "Katalin",
+      "lastName": "Horváth",
+      "email": "horvath.katalin@example.hu",
+      "phone": "+36207778899"
+    }
+  ],
+  "accounts": [
+    {
+      "id": "b1b2c3d4-2222-4000-8000-000000000001",
+      "customerId": "a1b2c3d4-1111-4000-8000-000000000001",
+      "accountNumber": "HU42117730161110180000000001",
+      "accountType": "CHECKING",
+      "currency": "HUF",
+      "balance": 1500000.00
+    },
+    {
+      "id": "b1b2c3d4-2222-4000-8000-000000000002",
+      "customerId": "a1b2c3d4-1111-4000-8000-000000000001",
+      "accountNumber": "HU42117730161110180000000006",
+      "accountType": "SAVINGS",
+      "currency": "EUR",
+      "balance": 2500.00
+    },
+    {
+      "id": "b1b2c3d4-2222-4000-8000-000000000003",
+      "customerId": "a1b2c3d4-1111-4000-8000-000000000002",
+      "accountNumber": "HU42117730161110180000000002",
+      "accountType": "CHECKING",
+      "currency": "HUF",
+      "balance": 850000.00
+    },
+    {
+      "id": "b1b2c3d4-2222-4000-8000-000000000004",
+      "customerId": "a1b2c3d4-1111-4000-8000-000000000003",
+      "accountNumber": "HU42117730161110180000000003",
+      "accountType": "CHECKING",
+      "currency": "EUR",
+      "balance": 3200.00
+    },
+    {
+      "id": "b1b2c3d4-2222-4000-8000-000000000005",
+      "customerId": "a1b2c3d4-1111-4000-8000-000000000004",
+      "accountNumber": "HU42117730161110180000000004",
+      "accountType": "CHECKING",
+      "currency": "HUF",
+      "balance": 2300000.00
+    },
+    {
+      "id": "b1b2c3d4-2222-4000-8000-000000000006",
+      "customerId": "a1b2c3d4-1111-4000-8000-000000000004",
+      "accountNumber": "HU42117730161110180000000007",
+      "accountType": "SAVINGS",
+      "currency": "USD",
+      "balance": 5000.00
+    },
+    {
+      "id": "b1b2c3d4-2222-4000-8000-000000000007",
+      "customerId": "a1b2c3d4-1111-4000-8000-000000000005",
+      "accountNumber": "HU42117730161110180000000005",
+      "accountType": "SAVINGS",
+      "currency": "HUF",
+      "balance": 750000.00
+    }
+  ],
+  "transactions": [
+    {
+      "id": "c1b2c3d4-3333-4000-8000-000000000001",
+      "fromAccountId": "b1b2c3d4-2222-4000-8000-000000000001",
+      "toAccountId": "b1b2c3d4-2222-4000-8000-000000000003",
+      "amount": 25000.00,
+      "currency": "HUF"
+    },
+    {
+      "id": "c1b2c3d4-3333-4000-8000-000000000002",
+      "fromAccountId": "b1b2c3d4-2222-4000-8000-000000000004",
+      "toAccountId": "b1b2c3d4-2222-4000-8000-000000000002",
+      "amount": 100.00,
+      "currency": "EUR"
+    },
+    {
+      "id": "c1b2c3d4-3333-4000-8000-000000000003",
+      "fromAccountId": "b1b2c3d4-2222-4000-8000-000000000005",
+      "toAccountId": "b1b2c3d4-2222-4000-8000-000000000007",
+      "amount": 50000.00,
+      "currency": "HUF"
+    }
+  ]
+}

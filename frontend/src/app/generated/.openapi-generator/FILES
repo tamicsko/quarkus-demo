@@ -1,8 +1,8 @@
 .gitignore
-.openapi-generator-ignore
 README.md
 api.base.service.ts
 api.module.ts
+api/account.service.ts
 api/api.ts
 api/client.service.ts
 api/statement.service.ts
@@ -15,6 +15,7 @@ model/accountInfoDto.ts
 model/accountStatementDto.ts
 model/clientDetailDto.ts
 model/clientSummaryDto.ts
+model/depositRequest.ts
 model/errorResponse.ts
 model/models.ts
 model/openAccountRequest.ts
@@ -23,6 +24,7 @@ model/statementTransactionDto.ts
 model/transferRequest.ts
 model/transferResultDto.ts
 model/transferStatusDto.ts
+model/withdrawRequest.ts
 param.ts
 provide-api.ts
 query.params.ts

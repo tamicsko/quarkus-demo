@@ -10,6 +10,8 @@ info:
 tags:
   - name: Client
     description: Ügyfélkezelés (orchestráció — Customer + Account Service)
+  - name: Account
+    description: Számla műveletek (befizetés, egyenleg)
   - name: Transfer
     description: Átutalás (orchestráció — Customer + Account + Transaction Service)
   - name: Statement
@@ -139,6 +141,93 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
 
   # ===========================================================================
+  # ACCOUNT (számla műveletek) végpontok
+  # ===========================================================================
+  /api/accounts/{id}/deposit:
+    post:
+      tags: [Account]
+      operationId: depositToAccount
+      summary: Befizetés számlára
+      description: |
+        Egyenleg feltöltés (credit) — pl. készpénz befizetés, külső utalás beérkezése.
+        Az Account Service credit végpontját hívja.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Számla azonosító
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DepositRequest"
+      responses:
+        "200":
+          description: Befizetés sikeres
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountInfoDto"
+        "404":
+          description: Számla nem található
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "400":
+          description: Érvénytelen összeg vagy nem aktív számla
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/accounts/{id}/withdraw:
+    post:
+      tags: [Account]
+      operationId: withdrawFromAccount
+      summary: Kifizetés számláról
+      description: |
+        Egyenleg terhelés (debit) — pl. készpénz felvétel, díjak levonása.
+        Az Account Service debit végpontját hívja.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Számla azonosító
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WithdrawRequest"
+      responses:
+        "200":
+          description: Kifizetés sikeres
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountInfoDto"
+        "404":
+          description: Számla nem található
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "400":
+          description: Nincs fedezet, érvénytelen összeg, vagy nem aktív számla
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ===========================================================================
   # TRANSFER (átutalás) végpontok
   # ===========================================================================
   /api/transfer:
@@ -223,8 +312,8 @@ paths:
           required: true
           description: Számla azonosító
           schema:
-            type: integer
-            format: int64
+            type: string
+            format: uuid
       responses:
         "200":
           description: Számla kivonat
@@ -247,8 +336,8 @@ components:
       required: true
       description: Ügyfél azonosító
       schema:
-        type: integer
-        format: int64
+        type: string
+        format: uuid
 
   schemas:
     # =========================================================================
@@ -259,8 +348,8 @@ components:
       description: Ügyfél összefoglaló (lista nézethez)
       properties:
         id:
-          type: integer
-          format: int64
+          type: string
+          format: uuid
         taxId:
           type: string
         firstName:
@@ -281,8 +370,8 @@ components:
       description: Ügyfél részletes nézet (adatok + összes számla)
       properties:
         id:
-          type: integer
-          format: int64
+          type: string
+          format: uuid
         taxId:
           type: string
         firstName:
@@ -347,8 +436,8 @@ components:
       description: Számla infó (BFF nézet)
       properties:
         id:
-          type: integer
-          format: int64
+          type: string
+          format: uuid
         accountNumber:
           type: string
         accountType:
@@ -385,6 +474,39 @@ components:
           default: 0.0
 
     # =========================================================================
+    # DEPOSIT DTO-k
+    # =========================================================================
+    DepositRequest:
+      type: object
+      required:
+        - amount
+      properties:
+        amount:
+          type: number
+          format: double
+          example: 500000.00
+          description: Befizetendő összeg
+        reason:
+          type: string
+          example: "Készpénz befizetés"
+          description: Befizetés oka (opcionális)
+
+    WithdrawRequest:
+      type: object
+      required:
+        - amount
+      properties:
+        amount:
+          type: number
+          format: double
+          example: 50000.00
+          description: Kifizetendő összeg
+        reason:
+          type: string
+          example: "Készpénz felvétel"
+          description: Kifizetés oka (opcionális)
+
+    # =========================================================================
     # TRANSFER DTO-k
     # =========================================================================
     TransferRequest:
@@ -396,11 +518,11 @@ components:
         - currency
       properties:
         fromAccountId:
-          type: integer
-          format: int64
+          type: string
+          format: uuid
         toAccountId:
-          type: integer
-          format: int64
+          type: string
+          format: uuid
         amount:
           type: number
           format: double
@@ -443,8 +565,8 @@ components:
       description: Számla kivonat — számla adatok + tranzakció történet
       properties:
         accountId:
-          type: integer
-          format: int64
+          type: string
+          format: uuid
         accountNumber:
           type: string
         balance:
@@ -468,12 +590,17 @@ components:
           format: uuid
         direction:
           type: string
-          enum: [INCOMING, OUTGOING]
-          description: Az adott számla szemszögéből bejövő vagy kimenő
+          enum: [INCOMING, OUTGOING, DEPOSIT, WITHDRAWAL]
+          description: "Típus: INCOMING/OUTGOING (átutalás), DEPOSIT (befizetés), WITHDRAWAL (kifizetés)"
         counterpartyAccountId:
-          type: integer
-          format: int64
-          description: A másik fél számla azonosítója
+          type: string
+          format: uuid
+          nullable: true
+          description: A másik fél számla azonosítója (null befizetés/kifizetés esetén)
+        reason:
+          type: string
+          nullable: true
+          description: Befizetés/kifizetés oka
         amount:
           type: number
           format: double

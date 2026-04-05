@@ -1,0 +1,42 @@
+# Frontend Angular build — külön Tekton Task-ban fut
+# Így a Node.js megkapja a teljes 1GB memóriát (nincs buildah overhead)
+# Az output a workspace/source/frontend/dist/ könyvtárba kerül
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: frontend-angular-build
+  namespace: tamicsko-dev
+  labels:
+    app.kubernetes.io/part-of: bank-demo
+spec:
+  description: Angular production build using Red Hat UBI Node.js image
+  workspaces:
+    - name: source
+  steps:
+    - name: npm-build
+      image: registry.access.redhat.com/ubi9/nodejs-22:1
+      workingDir: $(workspaces.source.path)/frontend
+      env:
+        - name: NODE_OPTIONS
+          value: "--max-old-space-size=768"
+        - name: npm_config_cache
+          value: "$(workspaces.source.path)/.npm-cache"
+      script: |
+        #!/bin/bash
+        set -e
+        echo "=== Node.js $(node --version) ==="
+        echo "Working dir: $(pwd)"
+        echo "NODE_OPTIONS: $NODE_OPTIONS"
+        echo ""
+
+        echo "=== npm ci ==="
+        npm ci --prefer-offline
+
+        echo ""
+        echo "=== ng build ==="
+        npx ng build --configuration production
+
+        echo ""
+        echo "=== Output ==="
+        ls -la dist/frontend/browser/ | head -10
+        echo "Build complete!"

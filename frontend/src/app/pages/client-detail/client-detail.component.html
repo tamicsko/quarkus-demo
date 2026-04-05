@@ -1,25 +1,34 @@
 @if (client(); as c) {
+  <button mat-button routerLink="/clients">
+    <mat-icon>arrow_back</mat-icon> {{ 'detail.back' | translate }}
+  </button>
+
   <h1>{{ c.firstName }} {{ c.lastName }}</h1>
 
   <mat-card>
     <mat-card-header>
-      <mat-card-title>Client Details</mat-card-title>
+      <mat-card-title>{{ 'detail.title' | translate }}</mat-card-title>
     </mat-card-header>
     <mat-card-content>
       <div class="detail-grid">
-        <div><strong>ID:</strong> {{ c.id }}</div>
-        <div><strong>Tax ID:</strong> {{ c.taxId }}</div>
-        <div><strong>Email:</strong> {{ c.email }}</div>
-        <div><strong>Phone:</strong> {{ c.phone || '-' }}</div>
-        <div><strong>Status:</strong>
+        <div><strong>{{ 'detail.id' | translate }}:</strong> {{ c.id }}</div>
+        <div><strong>{{ 'detail.taxId' | translate }}:</strong> {{ c.taxId }}</div>
+        <div><strong>{{ 'detail.email' | translate }}:</strong> {{ c.email }}</div>
+        <div><strong>{{ 'detail.phone' | translate }}:</strong> {{ c.phone || '-' }}</div>
+        <div><strong>{{ 'detail.status' | translate }}:</strong>
           <span class="status-chip" [class]="'status-' + c.status?.toLowerCase()">{{ c.status }}</span>
         </div>
-        <div><strong>Created:</strong> {{ c.createdAt | date:'yyyy-MM-dd HH:mm' }}</div>
+        <div><strong>{{ 'detail.created' | translate }}:</strong> {{ c.createdAt | date:'yyyy-MM-dd HH:mm' }}</div>
       </div>
     </mat-card-content>
   </mat-card>
 
-  <h2>Accounts</h2>
+  <h2>{{ 'detail.accounts' | translate }}</h2>
+
+  <button mat-raised-button color="accent" (click)="openNewAccountDialog()">
+    <mat-icon>add</mat-icon> {{ 'detail.newAccount' | translate }}
+  </button>
+
   <table mat-table [dataSource]="c.accounts ?? []" class="mat-elevation-z2 account-table">
     <ng-container matColumnDef="id">
       <th mat-header-cell *matHeaderCellDef>ID</th>
@@ -27,27 +36,27 @@
     </ng-container>
 
     <ng-container matColumnDef="accountNumber">
-      <th mat-header-cell *matHeaderCellDef>Account Number</th>
+      <th mat-header-cell *matHeaderCellDef>{{ 'detail.accountNumber' | translate }}</th>
       <td mat-cell *matCellDef="let a">{{ a.accountNumber }}</td>
     </ng-container>
 
     <ng-container matColumnDef="type">
-      <th mat-header-cell *matHeaderCellDef>Type</th>
+      <th mat-header-cell *matHeaderCellDef>{{ 'detail.type' | translate }}</th>
       <td mat-cell *matCellDef="let a">{{ a.accountType }}</td>
     </ng-container>
 
     <ng-container matColumnDef="balance">
-      <th mat-header-cell *matHeaderCellDef>Balance</th>
+      <th mat-header-cell *matHeaderCellDef>{{ 'detail.balance' | translate }}</th>
       <td mat-cell *matCellDef="let a" class="amount">{{ a.balance | number:'1.2-2' }}</td>
     </ng-container>
 
     <ng-container matColumnDef="currency">
-      <th mat-header-cell *matHeaderCellDef>Currency</th>
+      <th mat-header-cell *matHeaderCellDef>{{ 'detail.currency' | translate }}</th>
       <td mat-cell *matCellDef="let a">{{ a.currency }}</td>
     </ng-container>
 
     <ng-container matColumnDef="status">
-      <th mat-header-cell *matHeaderCellDef>Status</th>
+      <th mat-header-cell *matHeaderCellDef>{{ 'detail.status' | translate }}</th>
       <td mat-cell *matCellDef="let a">
         <span class="status-chip" [class]="'status-' + a.status?.toLowerCase()">{{ a.status }}</span>
       </td>
@@ -56,7 +65,13 @@
     <ng-container matColumnDef="actions">
       <th mat-header-cell *matHeaderCellDef></th>
       <td mat-cell *matCellDef="let a">
-        <a mat-icon-button [routerLink]="['/statement', a.id]" matTooltip="Statement">
+        <button mat-icon-button color="primary" (click)="openDepositDialog(a)" [matTooltip]="'detail.deposit' | translate">
+          <mat-icon>add_circle</mat-icon>
+        </button>
+        <button mat-icon-button color="warn" (click)="openWithdrawDialog(a)" [matTooltip]="'detail.withdraw' | translate">
+          <mat-icon>remove_circle</mat-icon>
+        </button>
+        <a mat-icon-button [routerLink]="['/statement', a.id]" [queryParams]="{clientId: c.id}" [matTooltip]="'detail.statement' | translate">
           <mat-icon>receipt_long</mat-icon>
         </a>
       </td>

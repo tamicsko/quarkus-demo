@@ -36,4 +36,21 @@ body {
   margin: 0;
   height: 100%;
 }
-/* You can add global styles to this file, and also import other style files */
+/* Global table alignment */
+table.mat-mdc-table {
+  width: 100%;
+  table-layout: fixed;
+
+  th.mat-mdc-header-cell,
+  td.mat-mdc-cell {
+    padding: 8px 12px;
+    vertical-align: middle;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  th.mat-mdc-header-cell {
+    font-weight: 600;
+  }
+}

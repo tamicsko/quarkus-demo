@@ -1,0 +1,247 @@
+# =============================================================================
+# Tekton Pipeline — Bank Demo CI/CD
+# =============================================================================
+# Lépések:
+#   1. git-clone — GitHub repo klónozása
+#   2. maven-build — Java modulok buildolése (JAR)
+#   3. build-images — Buildah image build minden service-hez (5 darab, párhuzamosan)
+#   4. deploy — Deployment-ek újraindítása az új image-ekkel
+# =============================================================================
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: bank-demo-pipeline
+  namespace: tamicsko-dev
+spec:
+  params:
+    - name: git-url
+      type: string
+      default: "https://github.com/tamicsko/quarkus-demo.git"
+    - name: git-revision
+      type: string
+      default: "main"
+    - name: image-registry
+      type: string
+      default: "image-registry.openshift-image-registry.svc:5000/tamicsko-dev"
+
+  workspaces:
+    - name: shared-workspace
+
+  tasks:
+    # ----- 1. Git Clone -----
+    - name: git-clone
+      taskRef:
+        resolver: cluster
+        params:
+          - name: kind
+            value: task
+          - name: name
+            value: git-clone
+          - name: namespace
+            value: openshift-pipelines
+      params:
+        - name: URL
+          value: $(params.git-url)
+        - name: REVISION
+          value: $(params.git-revision)
+        - name: DELETE_EXISTING
+          value: "true"
+      workspaces:
+        - name: output
+          workspace: shared-workspace
+
+    # ----- 2. Maven Build (Java 21) -----
+    - name: maven-build
+      runAfter: [git-clone]
+      taskRef:
+        name: maven-java21
+      params:
+        - name: GOALS
+          value:
+            - package
+            - -DskipTests
+            - -q
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+
+    # ----- 3a. Build customer-service image -----
+    - name: build-customer-service
+      runAfter: [maven-build]
+      taskRef:
+        resolver: cluster
+        params:
+          - name: kind
+            value: task
+          - name: name
+            value: buildah
+          - name: namespace
+            value: openshift-pipelines
+      params:
+        - name: IMAGE
+          value: "$(params.image-registry)/customer-service:$(params.git-revision)"
+        - name: DOCKERFILE
+          value: "./services/customer-service/src/main/docker/Dockerfile.jvm"
+        - name: CONTEXT
+          value: "./services/customer-service"
+        - name: TLS_VERIFY
+          value: "false"
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+
+    # ----- 3b. Build account-service image -----
+    - name: build-account-service
+      runAfter: [build-customer-service]
+      taskRef:
+        resolver: cluster
+        params:
+          - name: kind
+            value: task
+          - name: name
+            value: buildah
+          - name: namespace
+            value: openshift-pipelines
+      params:
+        - name: IMAGE
+          value: "$(params.image-registry)/account-service:$(params.git-revision)"
+        - name: DOCKERFILE
+          value: "./services/account-service/src/main/docker/Dockerfile.jvm"
+        - name: CONTEXT
+          value: "./services/account-service"
+        - name: TLS_VERIFY
+          value: "false"
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+
+    # ----- 3c. Build transaction-service image -----
+    - name: build-transaction-service
+      runAfter: [build-account-service]
+      taskRef:
+        resolver: cluster
+        params:
+          - name: kind
+            value: task
+          - name: name
+            value: buildah
+          - name: namespace
+            value: openshift-pipelines
+      params:
+        - name: IMAGE
+          value: "$(params.image-registry)/transaction-service:$(params.git-revision)"
+        - name: DOCKERFILE
+          value: "./services/transaction-service/src/main/docker/Dockerfile.jvm"
+        - name: CONTEXT
+          value: "./services/transaction-service"
+        - name: TLS_VERIFY
+          value: "false"
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+
+    # ----- 3d. Build backend image -----
+    - name: build-backend
+      runAfter: [build-transaction-service]
+      taskRef:
+        resolver: cluster
+        params:
+          - name: kind
+            value: task
+          - name: name
+            value: buildah
+          - name: namespace
+            value: openshift-pipelines
+      params:
+        - name: IMAGE
+          value: "$(params.image-registry)/backend:$(params.git-revision)"
+        - name: DOCKERFILE
+          value: "./backend/src/main/docker/Dockerfile.jvm"
+        - name: CONTEXT
+          value: "./backend"
+        - name: TLS_VERIFY
+          value: "false"
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+
+    # ----- 3e. Frontend: Angular build (Node.js, külön step — nincs buildah overhead) -----
+    - name: build-frontend-app
+      runAfter: [build-backend]
+      taskRef:
+        name: frontend-angular-build
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+
+    # ----- 3f. Frontend: nginx image build (csak COPY, gyors) -----
+    - name: build-frontend-image
+      runAfter: [build-frontend-app]
+      taskRef:
+        resolver: cluster
+        params:
+          - name: kind
+            value: task
+          - name: name
+            value: buildah
+          - name: namespace
+            value: openshift-pipelines
+      params:
+        - name: IMAGE
+          value: "$(params.image-registry)/frontend:$(params.git-revision)"
+        - name: DOCKERFILE
+          value: "./frontend/Dockerfile.nginx"
+        - name: CONTEXT
+          value: "./frontend"
+        - name: TLS_VERIFY
+          value: "false"
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+
+    # ----- 4. Deploy — apply manifests + rollout restart -----
+    - name: deploy
+      runAfter:
+        - build-frontend-image
+      taskRef:
+        resolver: cluster
+        params:
+          - name: kind
+            value: task
+          - name: name
+            value: openshift-client
+          - name: namespace
+            value: openshift-pipelines
+      params:
+        - name: SCRIPT
+          value: |
+            SERVICES="customer-service account-service transaction-service backend frontend"
+            SANDBOX_DIR="${WORKSPACES_MANIFEST_DIR_PATH}/deployment/redhat-sandbox"
+
+            echo "=== Applying deployment manifests (replicas: 0 initially) ==="
+            for SVC in $SERVICES; do
+              oc apply -f "$SANDBOX_DIR/$SVC.yaml"
+              oc scale deployment/$SVC --replicas=0
+            done
+
+            echo "=== Tagging images as latest ==="
+            oc tag tamicsko-dev/customer-service:$(params.git-revision) tamicsko-dev/customer-service:latest
+            oc tag tamicsko-dev/account-service:$(params.git-revision) tamicsko-dev/account-service:latest
+            oc tag tamicsko-dev/transaction-service:$(params.git-revision) tamicsko-dev/transaction-service:latest
+            oc tag tamicsko-dev/backend:$(params.git-revision) tamicsko-dev/backend:latest
+            oc tag tamicsko-dev/frontend:$(params.git-revision) tamicsko-dev/frontend:latest
+
+            echo "=== Scaling up with correct images ==="
+            for SVC in $SERVICES; do
+              oc scale deployment/$SVC --replicas=1
+            done
+
+            echo "=== Waiting for rollouts ==="
+            for SVC in $SERVICES; do
+              oc rollout status deployment/$SVC --timeout=180s
+            done
+
+            echo "=== Deploy complete ==="
+      workspaces:
+        - name: manifest_dir
+          workspace: shared-workspace

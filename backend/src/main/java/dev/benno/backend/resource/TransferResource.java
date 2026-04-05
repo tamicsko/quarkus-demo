@@ -35,29 +35,32 @@ public class TransferResource implements TransferApi {
 
     @Override
     public Response initiateTransfer(TransferRequest request) {
-        LOG.infof("Initiating transfer: from=%d, to=%d, amount=%s, currency=%s",
+        LOG.infof("Initiating transfer: from=%s, to=%s, amount=%s, currency=%s",
                 request.getFromAccountId(), request.getToAccountId(),
                 request.getAmount(), request.getCurrency());
 
         // 1. Küldő számla ellenőrzése
+        String fromAccountId = request.getFromAccountId().toString();
+        String toAccountId = request.getToAccountId().toString();
+
         AccountDto fromAccount;
         try {
-            fromAccount = accountService.getAccount(request.getFromAccountId());
+            fromAccount = accountService.getAccount(fromAccountId);
         } catch (WebApplicationException e) {
             if (e.getResponse().getStatus() == 404) {
-                return notFound("Source account not found: id=" + request.getFromAccountId());
+                return notFound("Source account not found: id=" + fromAccountId);
             }
             throw e;
         }
 
         if (!"ACTIVE".equals(fromAccount.status)) {
-            LOG.warnf("Transfer rejected: source account id=%d is %s",
+            LOG.warnf("Transfer rejected: source account id=%s is %s",
                     fromAccount.id, fromAccount.status);
             return badRequest("Source account is not active: status=" + fromAccount.status);
         }
 
         if (fromAccount.balance < request.getAmount()) {
-            LOG.warnf("Transfer rejected: insufficient funds. accountId=%d, balance=%s, requested=%s",
+            LOG.warnf("Transfer rejected: insufficient funds. accountId=%s, balance=%s, requested=%s",
                     fromAccount.id, fromAccount.balance, request.getAmount());
             return badRequest("Insufficient funds: available=" + fromAccount.balance +
                     ", requested=" + request.getAmount());
@@ -66,16 +69,16 @@ public class TransferResource implements TransferApi {
         // 2. Fogadó számla ellenőrzése
         AccountDto toAccount;
         try {
-            toAccount = accountService.getAccount(request.getToAccountId());
+            toAccount = accountService.getAccount(toAccountId);
         } catch (WebApplicationException e) {
             if (e.getResponse().getStatus() == 404) {
-                return notFound("Target account not found: id=" + request.getToAccountId());
+                return notFound("Target account not found: id=" + toAccountId);
             }
             throw e;
         }
 
         if (!"ACTIVE".equals(toAccount.status)) {
-            LOG.warnf("Transfer rejected: target account id=%d is %s",
+            LOG.warnf("Transfer rejected: target account id=%s is %s",
                     toAccount.id, toAccount.status);
             return badRequest("Target account is not active: status=" + toAccount.status);
         }
@@ -85,8 +88,8 @@ public class TransferResource implements TransferApi {
         // 3. Tranzakció indítása a Transaction Service-en
         TransactionDto tx = transactionService.createTransaction(
                 new TransactionServiceClient.CreateTransactionRequest(
-                        request.getFromAccountId(),
-                        request.getToAccountId(),
+                        fromAccountId,
+                        toAccountId,
                         request.getAmount(),
                         request.getCurrency()));
 
