@@ -1,0 +1,52 @@
+# =============================================================================
+# Keepalive ServiceAccount + RBAC
+# =============================================================================
+# GitHub Actions használja az oc login-hoz, hogy a hibernált pod-okat
+# visszaskálázza (replicas=0 → 1). Minimális jogosultságok (least privilege):
+# csak deployment/statefulset scale + pod lista olvasásra van joga.
+#
+# A token generálása kézi lépés (egyszeri, vagy workspace clean után):
+#   oc create token keepalive --duration=8760h
+# A tokent a GitHub repo Settings > Secrets > OC_TOKEN-be kell másolni.
+# =============================================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: keepalive
+  namespace: tamicsko-dev
+  labels:
+    app: keepalive
+    app.kubernetes.io/part-of: bank-demo
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: keepalive-role
+  namespace: tamicsko-dev
+  labels:
+    app: keepalive
+    app.kubernetes.io/part-of: bank-demo
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/scale", "statefulsets", "statefulsets/scale"]
+    verbs: ["get", "list", "patch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: keepalive-binding
+  namespace: tamicsko-dev
+  labels:
+    app: keepalive
+    app.kubernetes.io/part-of: bank-demo
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: keepalive-role
+subjects:
+  - kind: ServiceAccount
+    name: keepalive
+    namespace: tamicsko-dev

@@ -424,23 +424,43 @@ up_local_docker() {
 sandbox_apply_infra() {
     local sandbox_dir="$DEPLOY_DIR/redhat-sandbox"
 
-    info "[1/4] Secrets és ConfigMap..."
+    info "[1/5] Secrets és ConfigMap..."
     oc apply -f "$sandbox_dir/secrets.yaml"
     oc apply -f "$sandbox_dir/configmaps.yaml"
     ok "Secrets és ConfigMap kész"
 
-    info "[2/4] PostgreSQL deploy..."
+    info "[2/5] Keepalive RBAC (ServiceAccount + Role + GitHub token)..."
+    oc apply -f "$sandbox_dir/keepalive-rbac.yaml"
+
+    # Token generálás és GitHub Secret frissítés
+    local oc_token oc_server gh_repo
+    oc_token=$(oc create token keepalive -n "$OC_NAMESPACE" --duration=8760h)
+    oc_server=$(oc whoami --show-server)
+    gh_repo=$(git -C "$SCRIPT_DIR" remote get-url origin | sed 's/.*github.com[:/]\(.*\)\.git/\1/')
+
+    if command -v gh &>/dev/null && gh auth status &>/dev/null 2>&1; then
+        gh secret set OC_TOKEN --repo "$gh_repo" --body "$oc_token"
+        gh secret set OC_SERVER --repo "$gh_repo" --body "$oc_server"
+        ok "Keepalive RBAC kész + GitHub Secrets (OC_TOKEN, OC_SERVER) frissítve"
+    else
+        warn "gh CLI nem elérhető vagy nincs bejelentkezve — GitHub Secrets kézi frissítés szükséges:"
+        warn "  gh secret set OC_TOKEN --repo $gh_repo --body \"\$(oc create token keepalive --duration=8760h)\""
+        warn "  gh secret set OC_SERVER --repo $gh_repo --body \"$oc_server\""
+        ok "Keepalive RBAC kész (GitHub Secrets kézzel frissítendő)"
+    fi
+
+    info "[3/5] PostgreSQL deploy..."
     oc apply -f "$sandbox_dir/postgres.yaml"
     info "Várakozás a Postgres pod-ra..."
     oc rollout status statefulset/postgres -n "$OC_NAMESPACE" --timeout=120s 2>/dev/null || \
         oc wait pod/postgres-0 -n "$OC_NAMESPACE" --for=condition=Ready --timeout=120s
     ok "PostgreSQL fut"
 
-    info "[3/4] BuildConfig-ok és ImageStream-ek..."
+    info "[4/5] BuildConfig-ok és ImageStream-ek..."
     oc apply -f "$sandbox_dir/buildconfigs.yaml"
     ok "BuildConfig-ok kész"
 
-    info "[4/4] Tekton pipeline, tasks, triggers..."
+    info "[5/5] Tekton pipeline, tasks, triggers..."
     if [[ -d "$sandbox_dir/tekton" ]]; then
         oc apply -f "$sandbox_dir/tekton/"
         ok "Tekton pipeline kész"

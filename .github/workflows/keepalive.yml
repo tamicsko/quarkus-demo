@@ -1,0 +1,85 @@
+# =============================================================================
+# GitHub Actions — Sandbox Keepalive
+# =============================================================================
+# Óránként (:30) ellenőrzi a sandbox Deployment-ek állapotát.
+# Ha az Idler controller leskálázta őket (replicas=0), visszaállítja 1-re.
+#
+# Prerekvizit:
+#   - GitHub Secrets: OC_TOKEN, OC_SERVER
+#   - Ezeket a bank-demo-ctl up redhat-sandbox --infra automatikusan frissíti
+#
+# Működés:
+#   1. oc login a keepalive ServiceAccount tokennel
+#   2. Ellenőrzi minden Deployment/StatefulSet replicas értékét
+#   3. Ha bármelyik 0 → scale 1-re + rollout wait
+#   4. Ha mind fut → no-op
+#
+# Költség: ~1 perc/futás × 24/nap × 30 nap = ~720 perc/hó (free tier: 2000)
+# =============================================================================
+name: Sandbox Keepalive
+
+on:
+  schedule:
+    - cron: "30 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Install oc CLI
+        run: |
+          curl -sL https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux.tar.gz | tar xz
+          sudo mv oc /usr/local/bin/
+
+      - name: Login to sandbox
+        run: |
+          oc login --token="${{ secrets.OC_TOKEN }}" --server="${{ secrets.OC_SERVER }}" --insecure-skip-tls-verify=true
+          echo "Logged in as: $(oc whoami)"
+
+      - name: Check and scale up
+        env:
+          NS: tamicsko-dev
+        run: |
+          NEED_WAKEUP=false
+
+          # StatefulSet (postgres)
+          PG_REPLICAS=$(oc get statefulset/postgres -n "$NS" -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "0")
+          if [[ "$PG_REPLICAS" == "0" ]]; then
+            echo "postgres: replicas=0 → scaling up"
+            oc scale statefulset/postgres --replicas=1 -n "$NS"
+            NEED_WAKEUP=true
+          else
+            echo "postgres: running"
+          fi
+
+          # Deployments
+          SERVICES="customer-service account-service transaction-service backend frontend"
+          for SVC in $SERVICES; do
+            REPLICAS=$(oc get deployment/$SVC -n "$NS" -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "0")
+            if [[ "$REPLICAS" == "0" ]]; then
+              echo "$SVC: replicas=0 → scaling up"
+              oc scale deployment/$SVC --replicas=1 -n "$NS"
+              NEED_WAKEUP=true
+            else
+              echo "$SVC: running"
+            fi
+          done
+
+          if [[ "$NEED_WAKEUP" == "true" ]]; then
+            echo ""
+            echo "=== Waiting for rollouts ==="
+            # Postgres kell először (DB dependency)
+            if [[ "$PG_REPLICAS" == "0" ]]; then
+              oc rollout status statefulset/postgres -n "$NS" --timeout=120s
+            fi
+            for SVC in $SERVICES; do
+              oc rollout status deployment/$SVC -n "$NS" --timeout=180s 2>/dev/null || echo "WARNING: $SVC rollout timeout"
+            done
+            echo "=== All services scaled up ==="
+          else
+            echo ""
+            echo "All services already running — no action needed."
+          fi
