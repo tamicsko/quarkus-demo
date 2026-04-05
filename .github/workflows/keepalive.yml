@@ -1,18 +1,15 @@
 # =============================================================================
 # GitHub Actions — Sandbox Keepalive
 # =============================================================================
-# Óránként (:30) ellenőrzi a sandbox Deployment-ek állapotát.
-# Ha az Idler controller leskálázta őket (replicas=0), visszaállítja 1-re.
+# Óránként (:30) ellenőrzi a sandbox állapotát és szükség szerint beavatkozik:
+#
+#   1. Deploymentek futnak (replicas=1)        → no-op
+#   2. Deploymentek léteznek de replicas=0     → oc scale (Idler leállította)
+#   3. Deploymentek nem léteznek               → pipeline triggerelés (down/clean után)
 #
 # Prerekvizit:
 #   - GitHub Secrets: OC_TOKEN, OC_SERVER
 #   - Ezeket a bank-demo-ctl up redhat-sandbox --infra automatikusan frissíti
-#
-# Működés:
-#   1. oc login a keepalive ServiceAccount tokennel
-#   2. Ellenőrzi minden Deployment/StatefulSet replicas értékét
-#   3. Ha bármelyik 0 → scale 1-re + rollout wait
-#   4. Ha mind fut → no-op
 #
 # Költség: ~1 perc/futás × 24/nap × 30 nap = ~720 perc/hó (free tier: 2000)
 # =============================================================================
@@ -26,7 +23,9 @@ on:
 jobs:
   keepalive:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
+    env:
+      NS: tamicsko-dev
 
     steps:
       - name: Install oc CLI
@@ -39,47 +38,116 @@ jobs:
           oc login --token="${{ secrets.OC_TOKEN }}" --server="${{ secrets.OC_SERVER }}" --insecure-skip-tls-verify=true
           echo "Logged in as: $(oc whoami)"
 
-      - name: Check and scale up
-        env:
-          NS: tamicsko-dev
+      - name: Check sandbox state
+        id: state
         run: |
-          NEED_WAKEUP=false
+          # Ellenőrizzük hogy a deploymentek léteznek-e
+          MISSING=0
+          SCALED_DOWN=0
+          RUNNING=0
 
-          # StatefulSet (postgres)
-          PG_REPLICAS=$(oc get statefulset/postgres -n "$NS" -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "0")
-          if [[ "$PG_REPLICAS" == "0" ]]; then
-            echo "postgres: replicas=0 → scaling up"
-            oc scale statefulset/postgres --replicas=1 -n "$NS"
-            NEED_WAKEUP=true
-          else
-            echo "postgres: running"
-          fi
-
-          # Deployments
           SERVICES="customer-service account-service transaction-service backend frontend"
           for SVC in $SERVICES; do
-            REPLICAS=$(oc get deployment/$SVC -n "$NS" -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "0")
-            if [[ "$REPLICAS" == "0" ]]; then
-              echo "$SVC: replicas=0 → scaling up"
-              oc scale deployment/$SVC --replicas=1 -n "$NS"
-              NEED_WAKEUP=true
+            if oc get deployment/$SVC -n "$NS" &>/dev/null; then
+              REPLICAS=$(oc get deployment/$SVC -n "$NS" -o jsonpath='{.spec.replicas}')
+              if [[ "$REPLICAS" == "0" ]]; then
+                echo "$SVC: replicas=0"
+                SCALED_DOWN=$((SCALED_DOWN + 1))
+              else
+                echo "$SVC: running"
+                RUNNING=$((RUNNING + 1))
+              fi
             else
-              echo "$SVC: running"
+              echo "$SVC: not found"
+              MISSING=$((MISSING + 1))
             fi
           done
 
-          if [[ "$NEED_WAKEUP" == "true" ]]; then
-            echo ""
-            echo "=== Waiting for rollouts ==="
-            # Postgres kell először (DB dependency)
+          echo "Summary: running=$RUNNING, scaled_down=$SCALED_DOWN, missing=$MISSING"
+
+          if [[ "$MISSING" -gt 0 ]]; then
+            echo "action=pipeline" >> "$GITHUB_OUTPUT"
+          elif [[ "$SCALED_DOWN" -gt 0 ]]; then
+            echo "action=scale" >> "$GITHUB_OUTPUT"
+          else
+            echo "action=none" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Scale up (Idler recovery)
+        if: steps.state.outputs.action == 'scale'
+        run: |
+          echo "=== Scaling up (Idler recovery) ==="
+
+          # Postgres először (DB dependency)
+          if oc get statefulset/postgres -n "$NS" &>/dev/null; then
+            PG_REPLICAS=$(oc get statefulset/postgres -n "$NS" -o jsonpath='{.spec.replicas}')
             if [[ "$PG_REPLICAS" == "0" ]]; then
+              echo "postgres: scaling up"
+              oc scale statefulset/postgres --replicas=1 -n "$NS"
               oc rollout status statefulset/postgres -n "$NS" --timeout=120s
             fi
-            for SVC in $SERVICES; do
-              oc rollout status deployment/$SVC -n "$NS" --timeout=180s 2>/dev/null || echo "WARNING: $SVC rollout timeout"
-            done
-            echo "=== All services scaled up ==="
-          else
-            echo ""
-            echo "All services already running — no action needed."
           fi
+
+          SERVICES="customer-service account-service transaction-service backend frontend"
+          for SVC in $SERVICES; do
+            if oc get deployment/$SVC -n "$NS" &>/dev/null; then
+              REPLICAS=$(oc get deployment/$SVC -n "$NS" -o jsonpath='{.spec.replicas}')
+              if [[ "$REPLICAS" == "0" ]]; then
+                echo "$SVC: scaling up"
+                oc scale deployment/$SVC --replicas=1 -n "$NS"
+              fi
+            fi
+          done
+
+          # Rollout wait
+          for SVC in $SERVICES; do
+            if oc get deployment/$SVC -n "$NS" &>/dev/null; then
+              oc rollout status deployment/$SVC -n "$NS" --timeout=180s || echo "WARNING: $SVC rollout timeout"
+            fi
+          done
+          echo "=== All services scaled up ==="
+
+      - name: Trigger pipeline (full rebuild)
+        if: steps.state.outputs.action == 'pipeline'
+        run: |
+          echo "=== Deployments missing — triggering pipeline ==="
+
+          # Ellenőrizzük hogy a pipeline infra létezik-e
+          if ! oc get pipeline/bank-demo-pipeline -n "$NS" &>/dev/null; then
+            echo "ERROR: Pipeline not found — run 'bank-demo-ctl up redhat-sandbox --infra' first"
+            exit 1
+          fi
+
+          # PipelineRun létrehozása
+          cat <<'PIPELINERUN' | oc create -n "$NS" -f -
+          apiVersion: tekton.dev/v1
+          kind: PipelineRun
+          metadata:
+            generateName: bank-demo-run-
+          spec:
+            pipelineRef:
+              name: bank-demo-pipeline
+            serviceAccountName: pipeline
+            params:
+              - name: git-url
+                value: "https://github.com/tamicsko/quarkus-demo.git"
+              - name: git-revision
+                value: "main"
+            workspaces:
+              - name: shared-workspace
+                persistentVolumeClaim:
+                  claimName: pipeline-workspace
+          PIPELINERUN
+
+          echo "Pipeline triggered — waiting for completion..."
+
+          # Megvárjuk a legfrissebb PipelineRun-t
+          sleep 10
+          LATEST_RUN=$(oc get pipelinerun -n "$NS" --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1].metadata.name}')
+          echo "PipelineRun: $LATEST_RUN"
+          oc wait pipelinerun/$LATEST_RUN -n "$NS" --for=condition=Succeeded --timeout=600s
+          echo "=== Pipeline completed ==="
+
+      - name: Already alive
+        if: steps.state.outputs.action == 'none'
+        run: echo "All services running — no action needed."
