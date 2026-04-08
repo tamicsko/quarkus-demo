@@ -248,7 +248,7 @@ public class AccountResource implements AccountApi {
 
     private BalanceHistoryDto toBalanceHistoryDto(BalanceHistory entity) {
         BalanceHistoryDto dto = new BalanceHistoryDto();
-        dto.setId(UUID.fromString(entity.id));
+        dto.setId(Long.parseLong(entity.id));
         dto.setAccountId(UUID.fromString(entity.account.id));
         dto.setOldBalance(entity.oldBalance.doubleValue());
         dto.setNewBalance(entity.newBalance.doubleValue());
