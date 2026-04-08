@@ -41,11 +41,27 @@ jobs:
       - name: Check sandbox state
         id: state
         run: |
-          # Ellenőrizzük hogy a deploymentek léteznek-e
+          # Ellenőrizzük hogy a postgres + deploymentek léteznek-e
           MISSING=0
           SCALED_DOWN=0
           RUNNING=0
 
+          # Postgres (StatefulSet)
+          if oc get statefulset/postgres -n "$NS" &>/dev/null; then
+            PG_REPLICAS=$(oc get statefulset/postgres -n "$NS" -o jsonpath='{.spec.replicas}')
+            if [[ "$PG_REPLICAS" == "0" ]]; then
+              echo "postgres: replicas=0"
+              SCALED_DOWN=$((SCALED_DOWN + 1))
+            else
+              echo "postgres: running"
+              RUNNING=$((RUNNING + 1))
+            fi
+          else
+            echo "postgres: not found"
+            MISSING=$((MISSING + 1))
+          fi
+
+          # Deployments
           SERVICES="customer-service account-service transaction-service backend frontend"
           for SVC in $SERVICES; do
             if oc get deployment/$SVC -n "$NS" &>/dev/null; then
