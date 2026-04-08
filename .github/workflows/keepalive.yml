@@ -62,7 +62,7 @@ jobs:
           fi
 
           # Deployments
-          SERVICES="customer-service account-service transaction-service backend frontend"
+          SERVICES="customer-service account-service transaction-service backend frontend el-github-listener"
           for SVC in $SERVICES; do
             if oc get deployment/$SVC -n "$NS" &>/dev/null; then
               REPLICAS=$(oc get deployment/$SVC -n "$NS" -o jsonpath='{.spec.replicas}')
@@ -104,7 +104,7 @@ jobs:
             fi
           fi
 
-          SERVICES="customer-service account-service transaction-service backend frontend"
+          SERVICES="customer-service account-service transaction-service backend frontend el-github-listener"
           for SVC in $SERVICES; do
             if oc get deployment/$SVC -n "$NS" &>/dev/null; then
               REPLICAS=$(oc get deployment/$SVC -n "$NS" -o jsonpath='{.spec.replicas}')
